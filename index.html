@@ -191,7 +191,7 @@
                 <div class="data-section">
                     <h3>শেষ অটো ব্যাকআপ স্ট্যাটাস</h3>
                     <p style="font-size: 0.9em;">শেষ সফল ব্যাকআপ সময়: <strong id="lastBackupTime" style="color: var(--secondary-color);">লোড হচ্ছে...</strong></p>
-                    <small>ডেটা প্রতি ১০ মিনিট পর পর ব্রাউজারের লোকাল স্টোরেজে স্বয়ংক্রিয়ভাবে সেভ হবে।</small>
+                    <small>ডেটা প্রতি ১০ মিনিট পর পর লোকাল স্টোরেজ এবং GitHub-এ স্বয়ংক্রিয়ভাবে সেভ হবে।</small>
                 </div>
 
                 <div class="data-section">
@@ -482,6 +482,115 @@
 
 
     <script>
+        // ----------------------------------------------------------------------
+        //  নতুন কোড: গিটহাব স্বয়ংক্রিয় ব্যাকআপ (GitHub Auto Backup)
+        // ----------------------------------------------------------------------
+
+        // !!! নিরাপত্তা সতর্কতা: নিচের ভ্যালুগুলো PUBLICLY EXPOSED হবে। 
+        // শুধু 'repo' স্কোপে সীমিত অ্যাক্সেস সহ একটি PAT ব্যবহার করুন।
+        // --- ধাপ ১: নিচের প্লেসহোল্ডারগুলো আপনার নিজস্ব মান দিয়ে প্রতিস্থাপন করুন ---
+        const GITHUB_PAT = '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'; // <<<<<<< ১. এটি পরিবর্তন করুন
+        const REPO_OWNER = 'brotherslink365;             // <<<<<<< ২. এটি পরিবর্তন করুন
+        const REPO_NAME = 'BN-billing-system-app';               // <<<<<<< ৩. এটি পরিবর্তন করুন
+        // ------------------------------------------------------------------------
+
+        const BACKUP_FILE_PATH = 'billing_system_backup.json';    // রিপোজিটরিতে ডেটা এই নামে সেভ হবে
+        const GITHUB_BACKUP_INTERVAL_MS = 600000; // গিটহাব ব্যাকআপ ইন্টারভাল: 10 মিনিট (10 * 60 * 1000)
+        let gitHubBackupInterval;
+
+
+        // লোকাল স্টোরেজ থেকে ব্যাকআপের জন্য ডেটা সংগ্রহ করে JSON স্ট্রিং হিসাবে রিটার্ন করে
+        function getLocalDataForBackup() {
+            const backupData = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                // আমরা কিছু ক্ষণস্থায়ী বা লগইন সম্পর্কিত কী (Key) বাদ দিচ্ছি
+                if (key !== 'darkMode' && key !== 'currentRole' && key !== 'currentUsername') {
+                    backupData[key] = localStorage.getItem(key);
+                }
+            }
+            return JSON.stringify(backupData, null, 2); // সুন্দর ফরম্যাটে JSON তৈরি
+        }
+
+        // গিটহাব API ব্যবহার করে ডেটা ব্যাকআপের মূল ফাংশন
+        async function backupDataToGitHub() {
+            if (GITHUB_PAT === 'YOUR_GITHUB_PERSONAL_ACCESS_TOKEN') {
+                console.error('GitHub PAT কনফিগার করা হয়নি। ব্যাকআপ বাতিল করা হলো।');
+                return;
+            }
+
+            const backupContent = getLocalDataForBackup();
+            // GitHub API এর জন্য Base64 এনকোডিং প্রয়োজন
+            const encodedContent = btoa(unescape(encodeURIComponent(backupContent)));
+
+            const contentUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${BACKUP_FILE_PATH}`;
+
+            try {
+                // স্টেপ ১: বর্তমান ফাইলের SHA (প্রয়োজনীয়) নেওয়া
+                const getResponse = await fetch(contentUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `token ${GITHUB_PAT}`,
+                        'Accept': 'application/vnd.github.com+json'
+                    }
+                });
+
+                let sha = null;
+                if (getResponse.ok) {
+                    const fileData = await getResponse.json();
+                    sha = fileData.sha; // ফাইলটি বিদ্যমান থাকলে তার SHA
+                } else if (getResponse.status === 404) {
+                    console.log('ব্যাকআপ ফাইল পাওয়া যায়নি। একটি নতুন ফাইল তৈরি করা হচ্ছে।');
+                    // SHA null থাকবে, নতুন ফাইল তৈরি হবে
+                } else {
+                    console.error('ফাইল SHA আনতে ব্যর্থ:', getResponse.status, await getResponse.json());
+                    return;
+                }
+
+                // স্টেপ ২: নতুন ডেটা কমিট করা (PUT অনুরোধ)
+                const commitPayload = {
+                    message: `Auto-backup: ${new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' })}`,
+                    content: encodedContent,
+                    sha: sha // ফাইল আপডেট করতে SHA দরকার, নতুন ফাইল তৈরিতে SHA বাদ দেওয়া হয়
+                };
+
+                const putResponse = await fetch(contentUrl, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${GITHUB_PAT}`,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/vnd.github.com+json'
+                    },
+                    body: JSON.stringify(commitPayload)
+                });
+
+                if (putResponse.ok) {
+                    const now = new Date().toLocaleString('bn-BD');
+                    localStorage.setItem('lastGitHubBackupTime', now); // গিটহাব ব্যাকআপের সময় ট্র্যাক করার জন্য নতুন কী
+                    document.getElementById('lastBackupTime').textContent = now + ' (GitHub)'; // ড্যাশবোর্ড আপডেট
+                    console.log('ডেটা সফলভাবে GitHub-এ ব্যাকআপ হয়েছে!');
+                } else {
+                    console.error('GitHub ব্যাকআপ ব্যর্থ:', await putResponse.json());
+                }
+
+            } catch (error) {
+                console.error('GitHub ব্যাকআপ প্রক্রিয়ায় ত্রুটি:', error);
+            }
+        }
+
+        // গিটহাব ব্যাকআপ ইন্টারভালে শুরু করার ফাংশন
+        function startGitHubAutoBackup() {
+            if (gitHubBackupInterval) {
+                clearInterval(gitHubBackupInterval);
+            }
+            // একবার অবিলম্বে চালানো এবং তারপর প্রতি 10 মিনিটে
+            backupDataToGitHub();
+            gitHubBackupInterval = setInterval(backupDataToGitHub, GITHUB_BACKUP_INTERVAL_MS);
+        }
+
+        // ----------------------------------------------------------------------
+        //  আপনার অরিজিনাল কোড
+        // ----------------------------------------------------------------------
         // --- 1. Global State & Initial Data ---
         const USER_ROLES = { ADMIN: 'admin', COLLECTOR: 'collector' };
         
@@ -498,7 +607,7 @@
             AREAS: 'billingAreas',
             CUSTOMERS: 'billingCustomers',
             TRANSACTIONS: 'billingTransactions',
-            LAST_BACKUP: 'lastAutoBackupTime' // New key for tracking auto-backup time
+            LAST_BACKUP: 'lastAutoBackupTime' // Local storage backup time
         };
 
         // Default initial data for first run
@@ -537,15 +646,17 @@
             localStorage.setItem(LOCAL_STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
             localStorage.setItem(LOCAL_STORAGE_KEYS.TRANSACTIONS, JSON.stringify(transactions));
             
-            // Update the last auto backup time
+            // Update the last local storage backup time
             const now = new Date().toLocaleString('bn-BD');
             localStorage.setItem(LOCAL_STORAGE_KEYS.LAST_BACKUP, now);
-            document.getElementById('lastBackupTime').textContent = now;
+            
+            // Update the display to show the most recent backup time
+            updateBackupTimeDisplay();
 
-            console.log(`[Auto Backup] Data saved successfully to LocalStorage at ${now}`);
+            console.log(`[Local Backup] Data saved successfully to LocalStorage at ${now}`);
         }
 
-        // Auto-Backup Setup
+        // Local Storage Auto-Backup Setup
         const AUTO_BACKUP_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
         let autoBackupInterval;
 
@@ -559,8 +670,18 @@
         }
         
         function updateBackupTimeDisplay() {
-            const lastTime = localStorage.getItem(LOCAL_STORAGE_KEYS.LAST_BACKUP);
-            document.getElementById('lastBackupTime').textContent = lastTime || 'কখনো ব্যাকআপ হয়নি।';
+            // Updated to check both GitHub and Local times
+            const lastGitHubTime = localStorage.getItem('lastGitHubBackupTime');
+            const lastLocalTime = localStorage.getItem(LOCAL_STORAGE_KEYS.LAST_BACKUP);
+            
+            let displayTime = 'কখনো ব্যাকআপ হয়নি।';
+            if (lastGitHubTime) {
+                displayTime = `${lastGitHubTime} (GitHub)`;
+            } else if (lastLocalTime) {
+                displayTime = `${lastLocalTime} (Local)`;
+            }
+            
+            document.getElementById('lastBackupTime').textContent = displayTime;
         }
 
         function generateUniqueId() { return customers.length > 0 ? Math.max(...customers.map(c => c.id)) + 1 : 101; }
@@ -602,9 +723,12 @@
             document.getElementById('mainApp').style.display = 'none';
             document.getElementById('loginScreen').style.display = 'flex';
             
-            // Stop auto backup interval
+            // Stop both auto backup intervals
             if (autoBackupInterval) {
                 clearInterval(autoBackupInterval);
+            }
+            if (gitHubBackupInterval) {
+                clearInterval(gitHubBackupInterval);
             }
         }
 
@@ -648,7 +772,7 @@
             if (viewId === 'customers') renderCustomerTable();
             if (viewId === 'billing') {
                 filterBillingCustomers('');
-                populateCollectorDropdown(); // <--- UPDATED FUNCTION CALL
+                populateCollectorDropdown(); 
             }
             if (viewId === 'reports') {
                 // Clear filters on view change and render all transactions
@@ -658,7 +782,7 @@
             }
             if (viewId === 'collectors' && currentRole === USER_ROLES.ADMIN) renderCollectorPerformance();
             if (viewId === 'settings' && currentRole === USER_ROLES.ADMIN) {
-                populateUserEditDropdown();
+                populateUserEditDropdown(); 
                 populateAreaManagement();
             }
         }
@@ -675,7 +799,6 @@
 
             const dueCustomers = relevantCustomers.filter(c => c.due);
             const monthlyCollection = relevantTransactions.reduce((sum, t) => sum + t.amount, 0);
-
             const target = DEMO_USERS[currentUsername].target;
             const progress = (monthlyCollection / target) * 100;
 
@@ -733,11 +856,11 @@
         function renderCustomerTable(filteredCustomers = customers) {
             const tableBody = document.getElementById('customerTableBody');
             tableBody.innerHTML = '';
-
+            
             const isAdmin = currentRole === USER_ROLES.ADMIN;
-            // **পরিবর্তিত কোড: কালেক্টর সহ সকল রোল এখন সকল গ্রাহককে দেখতে পারবে।**
-            const relevantCustomers = filteredCustomers; 
-
+            
+            const relevantCustomers = filteredCustomers;
+            
             if (relevantCustomers.length === 0) {
                 tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center;">কোনো গ্রাহক পাওয়া যায়নি।</td></tr>';
                 return;
@@ -752,7 +875,6 @@
                 const phoneLink = `tel:${customer.phone}`;
                 const smsLink = `sms:${customer.phone}`;
                 const whatsappLink = `https://wa.me/${customer.phone.replace(/[^0-9]/g, '')}`;
-
                 const contactIcons = `
                     <div class="contact-icons">
                         <a href="${phoneLink}" title="কল করুন" style="margin-right: 5px;"><i class="fas fa-phone-alt"></i></a>
@@ -781,7 +903,7 @@
 
         document.getElementById('customerForm').onsubmit = function(e) {
             e.preventDefault();
-
+            
             if (currentRole !== USER_ROLES.ADMIN) {
                 alert('এই অ্যাকশনের জন্য আপনার পর্যাপ্ত অনুমতি নেই। শুধুমাত্র অ্যাডমিনই গ্রাহক যোগ/আপডেট করতে পারে।');
                 return;
@@ -793,7 +915,6 @@
             const area = document.getElementById('customerArea').value;
             const pkg = parseInt(document.getElementById('customerPackage').value);
             const status = document.getElementById('customerStatus').value;
-            
             const selectedCollectorUsername = getLeastBusyCollector(); // Assign to collector with least customers
 
             if (id) {
@@ -803,13 +924,13 @@
                 }
                 alert(`গ্রাহক ${name} আপডেট হয়েছে।`);
             } else {
-                const newCustomer = { 
-                    id: generateUniqueId(), 
-                    name, 
-                    phone, 
-                    area, 
-                    package: pkg, 
-                    status, 
+                const newCustomer = {
+                    id: generateUniqueId(),
+                    name,
+                    phone,
+                    area,
+                    package: pkg,
+                    status,
                     due: true, // New customers start with a due/unpaid status
                     collector: selectedCollectorUsername
                 };
@@ -828,7 +949,7 @@
             const submitBtn = document.getElementById('customerSubmitBtn');
 
             populateAreaDropdown();
-            
+
             if (mode === 'add') {
                 title.textContent = 'নতুন গ্রাহক যোগ';
                 submitBtn.textContent = 'যোগ করুন';
@@ -840,7 +961,6 @@
 
                 title.textContent = `গ্রাহক এডিট: ${customer.name} (ID: ${customer.id})`;
                 submitBtn.textContent = 'আপডেট করুন';
-                
                 document.getElementById('customerId').value = customer.id;
                 document.getElementById('customerName').value = customer.name;
                 document.getElementById('customerPhone').value = customer.phone;
@@ -857,608 +977,452 @@
 
         function deleteCustomer(id) {
             if (currentRole !== USER_ROLES.ADMIN) {
-                alert('এই অ্যাকশনের জন্য আপনার পর্যাপ্ত অনুমতি নেই।');
+                alert('এই অ্যাকশনের জন্য আপনার পর্যাপ্ত অনুমতি নেই। শুধুমাত্র অ্যাডমিনই গ্রাহক ডিলিট করতে পারে।');
                 return;
             }
-            if (confirm(`আপনি কি সত্যিই আইডি ${id} সহ এই গ্রাহককে ডিলিট করতে চান?`)) {
+
+            if (confirm('আপনি কি নিশ্চিত যে আপনি এই গ্রাহককে ডিলিট করতে চান?')) {
+                const initialLength = customers.length;
                 customers = customers.filter(c => c.id !== id);
-                // Also remove their transactions (optional, but good for demo/clean up)
-                transactions = transactions.filter(t => t.customerId !== id); 
-                saveAllData();
-                renderCustomerTable();
-                updateDashboard();
-                alert(`গ্রাহক আইডি ${id} সফলভাবে ডিলিট হয়েছে।`);
+                
+                // Remove transactions associated with this customer (optional)
+                transactions = transactions.filter(t => t.customerId !== id);
+
+                if (customers.length < initialLength) {
+                    alert('গ্রাহক সফলভাবে ডিলিট করা হয়েছে।');
+                    saveAllData();
+                    renderCustomerTable();
+                }
             }
         }
 
-        function filterCustomers() {
-            const searchText = document.getElementById('customerSearch').value.toLowerCase();
-            const filterStatus = document.getElementById('customerFilterStatus').value;
+        function getLeastBusyCollector() {
+            const collectorCounts = {};
+            const collectorUsers = Object.keys(DEMO_USERS).filter(u => DEMO_USERS[u].role === USER_ROLES.COLLECTOR);
 
+            if (collectorUsers.length === 0) {
+                // Assign to admin if no collectors
+                return Object.keys(DEMO_USERS).find(u => DEMO_USERS[u].role === USER_ROLES.ADMIN) || 'admin';
+            }
+
+            collectorUsers.forEach(username => {
+                collectorCounts[username] = customers.filter(c => c.collector === username).length;
+            });
+
+            // Find the collector with the minimum count
+            return Object.keys(collectorCounts).reduce((a, b) => collectorCounts[a] < collectorCounts[b] ? a : b, collectorUsers[0]);
+        }
+        
+        function filterCustomers() {
+            const search = document.getElementById('customerSearch').value.toLowerCase();
+            const statusFilter = document.getElementById('customerFilterStatus').value;
+            
             const filtered = customers.filter(c => {
-                const matchesSearch = c.name.toLowerCase().includes(searchText) || 
-                                      c.phone.toLowerCase().includes(searchText) ||
-                                      c.area.toLowerCase().includes(searchText);
-                
-                const matchesStatus = !filterStatus || c.status === filterStatus;
+                const matchesSearch = !search || 
+                                    c.name.toLowerCase().includes(search) || 
+                                    c.phone.includes(search) ||
+                                    c.area.toLowerCase().includes(search);
+                                    
+                const matchesStatus = !statusFilter || c.status === statusFilter;
                 
                 return matchesSearch && matchesStatus;
             });
+            
             renderCustomerTable(filtered);
         }
 
         // --- 7. Billing Logic ---
 
-        /**
-         * UPDATED: Sets the collector dropdown value and disables it for the 'collector' role.
-         */
         function populateCollectorDropdown() {
             const select = document.getElementById('collectorId');
-            select.innerHTML = ''; // Clear previous options
+            select.innerHTML = '';
             
-            const isAdmin = currentRole === USER_ROLES.ADMIN;
-            
-            // Collect all users who can collect (Admins and Collectors)
-            const collectors = Object.keys(DEMO_USERS)
-                .filter(key => DEMO_USERS[key].role === USER_ROLES.COLLECTOR || DEMO_USERS[key].role === USER_ROLES.ADMIN)
-                .map(key => ({
-                    username: key,
-                    name: DEMO_USERS[key].name,
-                    role: DEMO_USERS[key].role
-                }));
-            
-            collectors.forEach(user => {
-                const option = document.createElement('option');
-                option.value = user.username;
-                option.textContent = `${user.name} (${user.role === USER_ROLES.ADMIN ? 'অ্যাডমিন' : 'কালেক্টর'})`;
-                select.appendChild(option);
-            });
+            // Only show collectors and the current admin
+            const relevantUsers = Object.entries(DEMO_USERS).filter(([username, user]) => 
+                user.role === USER_ROLES.COLLECTOR || (user.role === USER_ROLES.ADMIN && username === currentUsername)
+            );
 
-            // LOGIC FOR ROLE-BASED DISABLING
-            if (!isAdmin) {
-                // If the user is a Collector, pre-select their name and disable the dropdown
-                select.value = currentUsername;
-                select.disabled = true; // Disable the option to change
-                select.title = "আপনার রোল কালেক্টর, তাই অন্য কালেক্টর নির্বাচন করতে পারবেন না।";
-            } else {
-                // If the user is an Admin, they can select anyone
-                select.value = currentUsername; // Default to admin's name
-                select.disabled = false;
-                select.title = "";
-            }
+            relevantUsers.forEach(([username, user]) => {
+                const selected = username === currentUsername ? 'selected' : '';
+                select.innerHTML += `<option value="${username}" ${selected}>${user.name} (${user.role})</option>`;
+            });
         }
         
-        function filterBillingCustomers(searchText = document.getElementById('billCustomerSearch').value) {
-            const searchInput = searchText.toLowerCase();
+        function filterBillingCustomers(searchTerm = '') {
+            const searchInput = document.getElementById('billCustomerSearch');
             const select = document.getElementById('billCustomerId');
-            select.innerHTML = ''; // Clear previous options
+            
+            if (searchTerm === '') {
+                searchTerm = searchInput.value.toLowerCase();
+            }
 
-            const filteredCustomers = customers.filter(c => 
+            const relevantCustomers = currentRole === USER_ROLES.ADMIN 
+                ? customers 
+                : customers.filter(c => c.collector === currentUsername);
+
+            const filteredCustomers = relevantCustomers.filter(c => 
                 c.status === 'Active' && (
-                    c.name.toLowerCase().includes(searchInput) ||
-                    String(c.id).includes(searchInput) ||
-                    c.phone.toLowerCase().includes(searchInput) ||
-                    c.area.toLowerCase().includes(searchInput)
+                    c.name.toLowerCase().includes(searchTerm) || 
+                    c.phone.includes(searchTerm) || 
+                    c.id.toString().includes(searchTerm) ||
+                    c.area.toLowerCase().includes(searchTerm)
                 )
             );
 
-            if (filteredCustomers.length === 0) {
-                select.innerHTML = '<option value="">কোনো গ্রাহক পাওয়া যায়নি</option>';
-                return;
+            select.innerHTML = '';
+
+            if (filteredCustomers.length > 0) {
+                filteredCustomers.forEach(c => {
+                    const dueStatus = c.due ? ' (বকেয়া)' : ' (ক্লিয়ার)';
+                    select.innerHTML += `<option value="${c.id}">ID: ${c.id} - ${c.name}, ${c.area} ${dueStatus} (৳${c.package})</option>`;
+                });
+                
+                // Try to pre-select the first one and show amount
+                if (filteredCustomers.length === 1) {
+                    document.getElementById('billCustomerId').value = filteredCustomers[0].id;
+                    document.getElementById('billAmount').value = filteredCustomers[0].package;
+                }
+            } else {
+                select.innerHTML = '<option value="">গ্রাহক পাওয়া যায়নি</option>';
+                document.getElementById('billAmount').value = '';
             }
 
-            filteredCustomers.forEach(c => {
-                const option = document.createElement('option');
-                option.value = c.id;
-                option.textContent = `${c.name} (ID: ${c.id}, এরিয়া: ${c.area}, প্যাকেজ: ৳${c.package}, বকেয়া: ${c.due ? 'হ্যাঁ' : 'না'})`;
-                select.appendChild(option);
-            });
+            // Update amount when selection changes
+            select.onchange = function() {
+                const selectedId = parseInt(this.value);
+                const selectedCustomer = customers.find(c => c.id === selectedId);
+                if (selectedCustomer) {
+                    document.getElementById('billAmount').value = selectedCustomer.package;
+                }
+            };
         }
 
         document.getElementById('billCollectionForm').onsubmit = function(e) {
             e.preventDefault();
-
-            const customerId = parseInt(document.getElementById('billCustomerId').value);
-            const billAmount = parseInt(document.getElementById('billAmount').value);
-            const paymentMethod = document.getElementById('paymentMethod').value;
             
-            // IMPORTANT: Get the collectorId. If disabled, we still need the value.
-            const collectorSelect = document.getElementById('collectorId');
-            const collectorId = collectorSelect.value;
+            const customerId = parseInt(document.getElementById('billCustomerId').value);
+            const amount = parseInt(document.getElementById('billAmount').value);
+            const paymentMethod = document.getElementById('paymentMethod').value;
+            const collectorUsername = document.getElementById('collectorId').value;
+
+            if (!customerId) {
+                alert('অনুগ্রহ করে গ্রাহক নির্বাচন করুন।');
+                return;
+            }
             
             const customerIndex = customers.findIndex(c => c.id === customerId);
-
             if (customerIndex === -1) {
-                alert('অনুগ্রহ করে একজন বৈধ গ্রাহক নির্বাচন করুন।');
+                alert('গ্রাহক ডেটাবেসে পাওয়া যায়নি।');
                 return;
             }
 
             const customer = customers[customerIndex];
-            const customerName = customer.name;
-            const customerPackage = customer.package;
-
-            if (billAmount < 10) {
-                 alert('আদায়ের পরিমাণ অন্তত ১০ টাকা হতে হবে।');
+            
+            if (amount <= 0) {
+                alert('আদায়ের পরিমাণ অবশ্যই ধনাত্মক হতে হবে।');
                 return;
             }
-
-            // 1. Record Transaction
+            
+            // Log Transaction
             const newTransaction = {
-                id: generateTransactionId(), // নতুন আইডি জেনারেটর ব্যবহার
-                customerId,
-                customerName,
-                package: customerPackage,
-                amount: billAmount,
+                id: generateTransactionId(),
+                customerId: customerId,
+                customerName: customer.name,
+                package: customer.package,
+                amount: amount,
                 method: paymentMethod,
-                collector: collectorId,
-                time: new Date().toISOString(), // Changed to ISOString for filterability
+                collector: collectorUsername,
+                time: new Date().toISOString()
             };
             transactions.push(newTransaction);
             
-            // 2. Update Customer Status (assuming a successful payment clears the due status)
-            if (customer.due) {
+            // Update Customer Status (assuming bill is paid off or partially paid)
+            // Simplification: Mark as paid (due: false) if amount covers at least the package amount
+            if (amount >= customer.package) {
                 customers[customerIndex].due = false;
-            }
-
-            // 3. Save Data and Refresh UI
-            saveAllData();
-            updateDashboard(); // Update collection stats
-            
-            document.getElementById('billCollectionForm').reset();
-            filterBillingCustomers(''); // Reset and reload dropdown
-            populateCollectorDropdown(); // Re-set the collector name after reset
-            
-            alert(`✅ বিল সফলভাবে পরিশোধ হয়েছে! গ্রাহক: ${customerName}, আদায়: ৳${billAmount}`);
-
-            // 4. Call Print Function for the newly created transaction
-            printInvoice(newTransaction.id);
-        };
-        
-        // --- নতুন ইনভয়েস/রিসিপ্ট প্রিন্ট ফাংশন ---
-        function printInvoice(transactionId) {
-            const transaction = transactions.find(t => t.id === transactionId);
-
-            if (!transaction) {
-                alert('লেনদেন খুঁজে পাওয়া যায়নি!');
-                return;
-            }
-
-            const customer = customers.find(c => c.id === transaction.customerId);
-            const customerName = transaction.customerName; 
-            const customerId = transaction.customerId;
-            const collectorName = DEMO_USERS[transaction.collector] ? DEMO_USERS[transaction.collector].name : 'N/A';
-            const customerArea = customer ? customer.area : 'N/A';
-            
-            // বাংলা তারিখ ও সময় ফরম্যাট
-            const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
-            const transactionDate = new Date(transaction.time).toLocaleDateString('bn-BD', options);
-            
-            const printContent = `
-                <!DOCTYPE html>
-                <html lang="bn">
-                <head>
-                    <meta charset="UTF-8">
-                    <title>রিসিপ্ট #${transaction.id}</title>
-                    <style>
-                        body { font-family: 'Arial', sans-serif; font-size: 12px; margin: 0; padding: 0; color: #000; }
-                        .receipt-container { 
-                            max-width: 80mm; 
-                            margin: 10px auto; 
-                            border: 1px solid #000; 
-                            padding: 10px; 
-                        }
-                        .header { text-align: center; margin-bottom: 10px; }
-                        .header h4 { margin: 0; font-size: 1.1em; }
-                        .header p { margin: 2px 0; font-size: 0.8em; }
-                        
-                        .details table { width: 100%; margin-bottom: 10px; border-collapse: collapse; }
-                        .details td { padding: 3px 0; border: none; }
-                        .details strong { font-weight: bold; }
-
-                        .items table { width: 100%; border-collapse: collapse; margin-top: 5px; }
-                        .items th, .items td { border-bottom: 1px dashed #999; padding: 5px 0; text-align: left; }
-                        .items th { text-align: center; font-weight: bold; background-color: #eee; }
-                        .text-right { text-align: right !important; }
-                        
-                        .total-row td { 
-                            font-weight: bold; 
-                            font-size: 1.1em; 
-                            border-top: 2px solid #000 !important; 
-                        }
-                        .footer { margin-top: 15px; font-size: 0.9em; text-align: center; }
-                        .footer p { margin: 5px 0; }
-                        
-                        @media print {
-                            body { font-size: 11px; }
-                            .receipt-container { border: none; padding: 0; margin: 0; }
-                            .bill-print-button { display: none; }
-                        }
-                    </style>
-                </head>
-                <body>
-                    <div class="receipt-container">
-                        <div class="header">
-                            <h4>বিল পেমেন্ট রিসিপ্ট</h4>
-                            <p>আপনার প্রতিষ্ঠানের নাম</p>
-                            <p>যোগাযোগ: ০০০০০০০০০০ | এরিয়া: ${customerArea}</p>
-                            <hr style="border: 1px dashed #000; margin: 5px 0;">
-                        </div>
-                        
-                        <div class="details">
-                            <table>
-                                <tr>
-                                    <td><strong>রিসিপ্ট নং:</strong> ${transaction.id}</td>
-                                    <td class="text-right"><strong>তারিখ:</strong> ${transactionDate}</td>
-                                </tr>
-                                <tr>
-                                    <td colspan="2"><strong>গ্রাহক:</strong> ${customerName} (ID: ${customerId})</td>
-                                </tr>
-                                <tr>
-                                    <td colspan="2"><strong>কালেক্টর:</strong> ${collectorName}</td>
-                                </tr>
-                            </table>
-                        </div>
-
-                        <div class="items">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th style="width: 50%;">বিবরণ</th>
-                                        <th style="width: 25%;" class="text-right">প্যাকেজ (৳)</th>
-                                        <th style="width: 25%;" class="text-right">আদায় (৳)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>মাসিক পরিষেবা বিল</td>
-                                        <td class="text-right">${transaction.package.toLocaleString('bn-BD')}</td>
-                                        <td class="text-right">${transaction.amount.toLocaleString('bn-BD')}</td>
-                                    </tr>
-                                </tbody>
-                                <tfoot>
-                                    <tr class="total-row">
-                                        <td colspan="2" class="text-right" style="border-bottom: 1px solid #000;">মোট আদায়:</td>
-                                        <td class="text-right" style="border-bottom: 1px solid #000;">৳ ${transaction.amount.toLocaleString('bn-BD')}</td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                        
-                        <div class="footer">
-                            <p>পেমেন্ট মেথড: <strong>${transaction.method}</strong></p>
-                            <p>ধন্যবাদ, আবার আসবেন।</p>
-                        </div>
-                        
-                        <div class="bill-print-button" style="text-align: center; margin-top: 15px;">
-                            <button onclick="window.print()" style="padding: 5px 10px; background-color: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">প্রিন্ট করুন</button>
-                            <button onclick="window.close()" style="padding: 5px 10px; background-color: #6c757d; color: white; border: none; border-radius: 3px; cursor: pointer; margin-left: 10px;">বন্ধ করুন</button>
-                        </div>
-                    </div>
-
-                </body>
-                </html>
-            `;
-
-            const printWindow = window.open('', '_blank', 'width=400,height=600');
-            if (printWindow) {
-                printWindow.document.write(printContent);
-                printWindow.document.close();
-                // window.print() will be called manually by user from the new window, or you can uncomment below line to auto-call:
-                // printWindow.print();
             } else {
-                alert('প্রিন্ট উইন্ডো খোলা সম্ভব হয়নি। অনুগ্রহ করে আপনার ব্রাউজারের পপ-আপ ব্লকার চেক করুন।');
+                // If partial payment, still keep due: true (for this simplified model)
+                customers[customerIndex].due = true; 
             }
-        }
-        // --- ইনভয়েস/রিসিপ্ট প্রিন্ট ফাংশন শেষ ---
-
-        // --- 8. System and Collector Management Logic ---
-
-        function autoGenerateBill() {
-             if (currentRole !== USER_ROLES.ADMIN) {
-                alert('এই অ্যাকশনের জন্য আপনার পর্যাপ্ত অনুমতি নেই।');
-                return;
-            }
-            if (confirm('আপনি কি সকল সক্রিয় গ্রাহকের জন্য মাসিক বিল তৈরি করতে চান এবং বকেয়া স্ট্যাটাস সেট করতে চান?')) {
-                let dueCount = 0;
-                customers = customers.map(c => {
-                    if (c.status === 'Active') {
-                        c.due = true;
-                        dueCount++;
-                    }
-                    return c;
-                });
-                saveAllData();
-                updateDashboard();
-                alert(`✅ ${dueCount} জন সক্রিয় গ্রাহকের জন্য বিল তৈরি হয়েছে। তাদের বকেয়া স্ট্যাটাস সেট করা হয়েছে।`);
-            }
-        }
-
-        function getLeastBusyCollector() {
-            const collectorLoads = {};
-            const collectors = Object.keys(DEMO_USERS).filter(u => DEMO_USERS[u].role === USER_ROLES.COLLECTOR || u === USER_ROLES.ADMIN);
             
-            collectors.forEach(username => {
-                collectorLoads[username] = customers.filter(c => c.collector === username).length;
-            });
+            // Reset form
+            document.getElementById('billCollectionForm').reset();
+            document.getElementById('billCustomerId').innerHTML = '<option value="">গ্রাহক নির্বাচন:</option>';
+            document.getElementById('billAmount').value = '';
 
-            if (collectors.length === 0) return 'admin'; // Default fallback
+            saveAllData();
+            alert(`৳${amount} সফলভাবে আদায় হয়েছে।`);
+            updateDashboard(); // Refresh dashboard stats
+            filterBillingCustomers(''); // Refresh customer list
+        };
 
-            let leastBusy = collectors[0];
-            let minLoad = collectorLoads[leastBusy];
 
-            for (const username in collectorLoads) {
-                if (collectorLoads[username] < minLoad) {
-                    minLoad = collectorLoads[username];
-                    leastBusy = username;
-                }
-            }
-            return leastBusy;
-        }
+        // --- 8. Reports & Analytics Logic ---
 
-        function renderCollectorPerformance() {
-            const tableBody = document.querySelector('#collectorPerformanceTable tbody');
-            tableBody.innerHTML = '';
-            
-            const users = Object.keys(DEMO_USERS);
-            
-            users.forEach(username => {
-                const user = DEMO_USERS[username];
-                
-                // Calculate total collection by this user
-                const totalCollection = transactions
-                    .filter(t => t.collector === username)
-                    .reduce((sum, t) => sum + t.amount, 0);
-                    
-                const target = user.target || 1; // Avoid division by zero
-                const progressPercentage = ((totalCollection / target) * 100).toFixed(1);
-                
-                const row = tableBody.insertRow();
-                row.innerHTML = `
-                    <td>${user.name} (${user.role === USER_ROLES.ADMIN ? 'Admin' : 'Collector'})</td>
-                    <td>${username}</td>
-                    <td>৳ ${totalCollection.toLocaleString('bn-BD')}</td>
-                    <td style="color: ${progressPercentage < 100 ? '#ffc107' : '#28a745'}; font-weight: bold;">${progressPercentage}%</td>
-                `;
-            });
-        }
-        
-        // --- 9. Transaction Report Logic (New/Modified) ---
-
-        function renderTransactionTable(dataToRender = transactions) {
+        function renderTransactionTable(filteredTransactions = transactions) {
             const tableBody = document.getElementById('transactionTableBody');
             tableBody.innerHTML = '';
+            
+            const isAdmin = currentRole === USER_ROLES.ADMIN;
+            
+            // Filter by current collector if not admin
+            const relevantTransactions = isAdmin 
+                ? filteredTransactions 
+                : filteredTransactions.filter(t => t.collector === currentUsername);
 
-            // Sort by date descending (latest first)
-            const sortedTransactions = [...dataToRender].sort((a, b) => new Date(b.time) - new Date(a.time));
-
-            if (sortedTransactions.length === 0) {
+            if (relevantTransactions.length === 0) {
                 tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">কোনো লেনদেন রেকর্ড নেই।</td></tr>';
                 return;
             }
 
-            sortedTransactions.forEach(t => {
-                // Convert ISO date to locale string for display
-                const displayTime = new Date(t.time).toLocaleString('bn-BD'); 
-                
+            // Sort by time descending
+            relevantTransactions.sort((a, b) => new Date(b.time) - new Date(a.time));
+
+            relevantTransactions.forEach(t => {
                 const row = tableBody.insertRow();
+                const transactionDate = new Date(t.time).toLocaleString('bn-BD');
+                const collectorName = DEMO_USERS[t.collector] ? DEMO_USERS[t.collector].name : t.collector;
+
                 row.innerHTML = `
-                    <td>${displayTime}</td>
-                    <td>${t.customerName}</td>
+                    <td>${transactionDate}</td>
+                    <td>${t.customerName} (ID: ${t.customerId})</td>
                     <td>৳ ${t.package}</td>
-                    <td>৳ ${t.amount}</td>
+                    <td style="font-weight: bold; color: green;">৳ ${t.amount}</td>
                     <td>${t.method}</td>
-                    <td>${DEMO_USERS[t.collector] ? DEMO_USERS[t.collector].name : 'N/A'}</td>
-                    <td>
-                        <button class="btn-action btn-sm" onclick="printInvoice(${t.id})" style="padding: 5px 8px;"><i class="fas fa-print"></i></button>
-                    </td>
+                    <td>${collectorName}</td>
+                    <td><button class="btn-action" style="padding: 5px 10px;" onclick="printInvoice(${t.id})"><i class="fas fa-print"></i></button></td>
                 `;
             });
         }
 
         function filterTransactionsByDate() {
-            const startDateInput = document.getElementById('startDate').value;
-            const endDateInput = document.getElementById('endDate').value;
-
-            if (!startDateInput || !endDateInput) {
-                alert('অনুগ্রহ করে শুরু এবং শেষের তারিখ উভয়ই নির্বাচন করুন।');
-                return;
-            }
-
-            // Start time at the beginning of the selected start day
-            const startTime = new Date(startDateInput);
-            startTime.setHours(0, 0, 0, 0);
-
-            // End time at the end of the selected end day (23:59:59.999)
-            const endTime = new Date(endDateInput);
-            endTime.setHours(23, 59, 59, 999);
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
             
-            if (startTime.getTime() > endTime.getTime()) {
-                 alert('শুরুর তারিখ শেষের তারিখের পরে হতে পারে না।');
-                return;
+            let filtered = transactions;
+            
+            if (startDate) {
+                const start = new Date(startDate).setHours(0, 0, 0, 0);
+                filtered = filtered.filter(t => new Date(t.time).getTime() >= start);
             }
+            
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setDate(end.getDate() + 1); // Include the entire end date
+                const endTimestamp = end.setHours(0, 0, 0, 0);
+                filtered = filtered.filter(t => new Date(t.time).getTime() < endTimestamp);
+            }
+            
+            renderTransactionTable(filtered);
+        }
 
-            const filteredData = transactions.filter(t => {
-                const transactionTime = new Date(t.time).getTime();
-                return transactionTime >= startTime.getTime() && transactionTime <= endTime.getTime();
-            });
+        function printInvoice(transactionId) {
+            const t = transactions.find(t => t.id === transactionId);
+            if (!t) return alert('লেনদেন পাওয়া যায়নি।');
 
-            renderTransactionTable(filteredData);
-            alert(`${filteredData.length} টি লেনদেন পাওয়া গেছে।`);
+            const collectorName = DEMO_USERS[t.collector] ? DEMO_USERS[t.collector].name : t.collector;
+            const customer = customers.find(c => c.id === t.customerId);
+            
+            const printContent = `
+                <h2>🧾 ইনভয়েস/রিসিপ্ট</h2>
+                <p><strong>বিলিং সিস্টেম প্রো</strong></p>
+                <hr>
+                <p><strong>রিসিপ্ট আইডি:</strong> ${t.id}</p>
+                <p><strong>তারিখ:</strong> ${new Date(t.time).toLocaleString('bn-BD')}</p>
+                <hr>
+                <h3>গ্রাহক তথ্য</h3>
+                <p><strong>নাম:</strong> ${t.customerName}</p>
+                <p><strong>আইডি:</strong> ${t.customerId}</p>
+                <p><strong>ফোন:</strong> ${customer ? customer.phone : 'N/A'}</p>
+                <p><strong>এরিয়া:</strong> ${customer ? customer.area : 'N/A'}</p>
+                <hr>
+                <h3>লেনদেনের বিবরণ</h3>
+                <p><strong>মাসিক প্যাকেজ:</strong> ৳ ${t.package}</p>
+                <p><strong>আদায়ের পরিমাণ:</strong> ৳ ${t.amount}</p>
+                <p><strong>পেমেন্ট পদ্ধতি:</strong> ${t.method}</p>
+                <p><strong>সংগ্রহকারী:</strong> ${collectorName}</p>
+                <hr>
+                <h2 style="color: green;">মোট পরিশোধিত: ৳ ${t.amount}</h2>
+            `;
+            
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write('<html><head><title>ইনভয়েস</title>');
+            printWindow.document.write('<style>body{font-family: Arial, sans-serif; line-height: 1.6;}</style>');
+            printWindow.document.write('</head><body>');
+            printWindow.document.write(printContent);
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            printWindow.print();
         }
 
         function exportTransactionToCSV() {
-            // Get the current filter dates to ensure the exported data matches the view
-            const startDateInput = document.getElementById('startDate').value;
-            const endDateInput = document.getElementById('endDate').value;
+            const header = ["তারিখ", "গ্রাহক আইডি", "গ্রাহক নাম", "প্যাকেজ", "আদায়", "পদ্ধতি", "কালেক্টর", "টাইমস্ট্যাম্প"];
             
-            let dataToExport = transactions;
-
-            if (startDateInput && endDateInput) {
-                 const startTime = new Date(startDateInput);
-                 startTime.setHours(0, 0, 0, 0);
-                 const endTime = new Date(endDateInput);
-                 endTime.setHours(23, 59, 59, 999);
-                
-                dataToExport = transactions.filter(t => {
-                    const transactionTime = new Date(t.time).getTime();
-                    return transactionTime >= startTime.getTime() && transactionTime <= endTime.getTime();
-                });
-            }
-
-            if (dataToExport.length === 0) {
-                alert('এক্সপোর্ট করার জন্য কোনো ডেটা নেই।');
-                return;
-            }
-            
-            // Sort data before export
-            const sortedData = [...dataToExport].sort((a, b) => new Date(b.time) - new Date(a.time));
-
-            // Define CSV headers (in Bengali matching the table) and prepare data
-            const headers = ["তারিখ", "গ্রাহক নাম", "প্যাকেজ (৳)", "আদায় (৳)", "পদ্ধতি", "কালেক্টর"];
-            
-            const csvData = sortedData.map(t => [
-                `"${new Date(t.time).toLocaleString('bn-BD')}"`, // Formatted date
-                `"${t.customerName}"`,
+            const csvRows = transactions.map(t => [
+                new Date(t.time).toLocaleString('bn-BD'),
+                t.customerId,
+                t.customerName,
                 t.package,
                 t.amount,
-                `"${t.method}"`,
-                `"${DEMO_USERS[t.collector] ? DEMO_USERS[t.collector].name : 'N/A'}"`
-            ]);
+                t.method,
+                t.collector,
+                t.time
+            ].map(String).map(s => `"${s.replace(/"/g, '""')}"`).join(','));
 
-            // Format the CSV content
-            let csvContent = headers.join(",") + "\n";
-            csvData.forEach(row => {
-                csvContent += row.join(",") + "\n";
-            });
-
-            // Create a Blob with UTF-8 BOM (\ufeff) for proper Bengali character support
-            const blob = new Blob(["\ufeff", csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.setAttribute('href', url);
-            
-            const exportFileName = startDateInput && endDateInput 
-                                 ? `bill_history_${startDateInput}_to_${endDateInput}.csv`
-                                 : `bill_history_full_${new Date().toLocaleDateString('en-CA')}.csv`;
-                                 
-            link.setAttribute('download', exportFileName);
+            const csvContent = [header.join(','), ...csvRows].join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute("download", "transaction_history.csv");
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-
-            alert(`মোট ${dataToExport.length} টি লেনদেন CSV তে এক্সপোর্ট করা হয়েছে।`);
         }
 
-        // --- 10. Area Management Logic ---
+        // --- 9. Collector Management Logic (Admin Only) ---
+
+        function renderCollectorPerformance() {
+            const tableBody = document.querySelector('#collectorPerformanceTable tbody');
+            tableBody.innerHTML = '';
+
+            const collectorStats = {};
+            const collectorUsers = Object.keys(DEMO_USERS).filter(u => DEMO_USERS[u].role === USER_ROLES.COLLECTOR || u === 'admin');
+
+            collectorUsers.forEach(username => {
+                collectorStats[username] = { 
+                    name: DEMO_USERS[username].name,
+                    target: DEMO_USERS[username].target,
+                    totalCollection: 0
+                };
+            });
+            
+            // Calculate collection for the current month
+            const currentMonthStart = new Date();
+            currentMonthStart.setDate(1);
+            currentMonthStart.setHours(0, 0, 0, 0);
+
+            transactions.forEach(t => {
+                const transactionDate = new Date(t.time);
+                if (transactionDate >= currentMonthStart && collectorStats[t.collector]) {
+                    collectorStats[t.collector].totalCollection += t.amount;
+                }
+            });
+
+            Object.entries(collectorStats).forEach(([username, stats]) => {
+                const row = tableBody.insertRow();
+                const percentage = (stats.totalCollection / stats.target) * 100;
+                const progressDisplay = `${percentage.toFixed(1)}%`;
+                const color = percentage >= 100 ? 'green' : percentage >= 50 ? 'orange' : 'red';
+
+                row.innerHTML = `
+                    <td>${stats.name}</td>
+                    <td>${username}</td>
+                    <td style="font-weight: bold;">৳ ${stats.totalCollection.toLocaleString('bn-BD')}</td>
+                    <td style="color: ${color}; font-weight: bold;">${progressDisplay}</td>
+                `;
+            });
+        }
+
+        // --- 10. Settings Logic (Admin Only) ---
 
         function populateAreaManagement() {
             const select = document.getElementById('existingAreaSelect');
-            select.innerHTML = '';
+            select.innerHTML = '<option value="">এরিয়া নির্বাচন করুন</option>';
             DEMO_AREAS.forEach(area => {
-                const option = document.createElement('option');
-                option.value = area;
-                option.textContent = area;
-                select.appendChild(option);
+                select.innerHTML += `<option value="${area}">${area}</option>`;
             });
-            // Automatically select and load the first area if available
-            if (DEMO_AREAS.length > 0) {
-                 loadAreaForEdit(DEMO_AREAS[0]);
-            } else {
-                document.getElementById('updatedAreaName').value = '';
-            }
+            document.getElementById('updatedAreaName').value = '';
         }
-        
+
         function loadAreaForEdit(areaName) {
             document.getElementById('updatedAreaName').value = areaName;
         }
 
         document.getElementById('addAreaForm').onsubmit = function(e) {
             e.preventDefault();
-            const newAreaName = document.getElementById('newAreaName').value.trim();
-            if (newAreaName && !DEMO_AREAS.includes(newAreaName)) {
-                DEMO_AREAS.push(newAreaName);
+            const newArea = document.getElementById('newAreaName').value.trim();
+            if (newArea && !DEMO_AREAS.includes(newArea)) {
+                DEMO_AREAS.push(newArea);
                 saveAllData();
-                alert(`এরিয়া "${newAreaName}" যোগ করা হয়েছে।`);
-                this.reset();
                 populateAreaManagement();
+                populateAreaDropdown();
+                alert(`এরিয়া "${newArea}" যোগ করা হয়েছে।`);
+                document.getElementById('newAreaName').value = '';
             } else {
-                alert('এরিয়া নাম বৈধ নয় বা ইতিমধ্যেই বিদ্যমান।');
+                alert('এরিয়া নাম লিখুন অথবা এটি ইতিমধ্যেই বিদ্যমান।');
             }
         };
 
         document.getElementById('editAreaForm').onsubmit = function(e) {
             e.preventDefault();
-            const oldAreaName = document.getElementById('existingAreaSelect').value;
-            const updatedAreaName = document.getElementById('updatedAreaName').value.trim();
-
-            if (!oldAreaName || !updatedAreaName || oldAreaName === updatedAreaName) {
-                alert('একটি এরিয়া নির্বাচন করুন এবং একটি নতুন নাম দিন।');
+            const oldArea = document.getElementById('existingAreaSelect').value;
+            const newAreaName = document.getElementById('updatedAreaName').value.trim();
+            
+            if (!oldArea || !newAreaName) {
+                alert('পুরোনো এবং নতুন এরিয়ার নাম উভয়ই দিতে হবে।');
+                return;
+            }
+            
+            if (oldArea === newAreaName) {
+                alert('নামের কোনো পরিবর্তন হয়নি।');
                 return;
             }
 
-            const index = DEMO_AREAS.indexOf(oldAreaName);
+            const index = DEMO_AREAS.indexOf(oldArea);
             if (index !== -1) {
-                // Update area name in the list
-                DEMO_AREAS[index] = updatedAreaName;
+                // 1. Update the area array
+                DEMO_AREAS[index] = newAreaName;
                 
-                // Update area name in all customers
-                customers = customers.map(c => {
-                    if (c.area === oldAreaName) {
-                        c.area = updatedAreaName;
+                // 2. Update all customers with the old area name
+                customers.forEach(c => {
+                    if (c.area === oldArea) {
+                        c.area = newAreaName;
                     }
-                    return c;
                 });
-                
+
                 saveAllData();
-                alert(`এরিয়া "${oldAreaName}" পরিবর্তন করে "${updatedAreaName}" করা হয়েছে।`);
                 populateAreaManagement();
+                populateAreaDropdown();
+                alert(`এরিয়া "${oldArea}" থেকে "${newAreaName}" এ পরিবর্তন করা হয়েছে।`);
             }
         };
-
+        
         function deleteArea() {
             const areaToDelete = document.getElementById('existingAreaSelect').value;
-
-            if (!areaToDelete || areaToDelete === 'Unassigned') {
-                 alert('ডিলিট করার জন্য একটি বৈধ এরিয়া নির্বাচন করুন।');
-                 return;
+            if (!areaToDelete) {
+                alert('ডিলিট করার জন্য একটি এরিয়া নির্বাচন করুন।');
+                return;
             }
-
-            if (confirm(`আপনি কি সত্যিই "${areaToDelete}" এরিয়াটি ডিলিট করতে চান? এই এরিয়ার গ্রাহকরা "Unassigned" হবে।`)) {
-                // Remove from area list
-                DEMO_AREAS = DEMO_AREAS.filter(area => area !== areaToDelete);
+            
+            if (confirm(`আপনি কি নিশ্চিত যে আপনি "${areaToDelete}" এরিয়া ডিলিট করতে চান? এই এরিয়ার গ্রাহকদের এরিয়া "Unassigned" হবে।`)) {
                 
-                // Update customers
-                customers = customers.map(c => {
+                // 1. Remove from array
+                DEMO_AREAS = DEMO_AREAS.filter(a => a !== areaToDelete);
+                
+                // 2. Update customers
+                customers.forEach(c => {
                     if (c.area === areaToDelete) {
                         c.area = 'Unassigned';
                     }
-                    return c;
                 });
                 
                 saveAllData();
-                alert(`এরিয়া "${areaToDelete}" সফলভাবে ডিলিট করা হয়েছে।`);
                 populateAreaManagement();
-                renderCustomerTable();
+                populateAreaDropdown();
+                alert(`এরিয়া "${areaToDelete}" সফলভাবে ডিলিট করা হয়েছে।`);
             }
         }
-
-        // --- 11. User Management Logic ---
-
+        
         function populateUserEditDropdown() {
             const select = document.getElementById('editUsername');
-            select.innerHTML = '';
-            
-            const users = Object.keys(DEMO_USERS);
-            users.forEach(username => {
-                const option = document.createElement('option');
-                option.value = username;
-                option.textContent = `${DEMO_USERS[username].name} (${DEMO_USERS[username].role})`;
-                select.appendChild(option);
+            select.innerHTML = '<option value="">ইউজার নির্বাচন করুন</option>';
+            Object.keys(DEMO_USERS).forEach(username => {
+                select.innerHTML += `<option value="${username}">${DEMO_USERS[username].name} (${username})</option>`;
             });
-            // Load the first user for editing by default
-            if (users.length > 0) {
-                loadUserForEdit(users[0]);
-            }
+            document.getElementById('editPassword').value = '';
+            document.getElementById('editUserName').value = '';
+            document.getElementById('editUserRole').innerHTML = '';
+            document.getElementById('editUserTarget').value = '';
         }
 
         function loadUserForEdit(username) {
@@ -1469,9 +1433,11 @@
             document.getElementById('editUserTarget').value = user.target;
             
             const roleSelect = document.getElementById('editUserRole');
-            roleSelect.innerHTML = `<option value="${user.role}">${user.role === USER_ROLES.ADMIN ? 'অ্যাডমিন' : 'কালেক্টর'}</option>`;
-            
-            // Prevent admin from editing their own role, or removing the last admin
+            roleSelect.innerHTML = `
+                <option value="collector" ${user.role === 'collector' ? 'selected' : ''}>কালেক্টর</option>
+                <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>অ্যাডমিন</option>
+            `;
+            // Admin's role cannot be changed for security/system integrity in this demo
             roleSelect.disabled = username === 'admin'; 
         }
 
@@ -1487,244 +1453,205 @@
                 alert('এই ইউজারনেমটি ইতিমধ্যেই বিদ্যমান।');
                 return;
             }
-
+            
             DEMO_USERS[username] = { password, role, name, target };
             saveAllData();
-            alert(`ইউজার "${username}" যোগ করা হয়েছে।`);
-            this.reset();
             populateUserEditDropdown();
+            document.getElementById('addUserForm').reset();
+            alert(`নতুন ইউজার "${name}" (${username}) যোগ করা হয়েছে।`);
         };
 
         document.getElementById('editUserForm').onsubmit = function(e) {
             e.preventDefault();
             const username = document.getElementById('editUsername').value;
             const newPassword = document.getElementById('editPassword').value;
-            const name = document.getElementById('editUserName').value.trim();
-            const target = parseInt(document.getElementById('editUserTarget').value);
+            const newName = document.getElementById('editUserName').value.trim();
+            const newTarget = parseInt(document.getElementById('editUserTarget').value);
+            const newRole = document.getElementById('editUserRole').value;
 
-            if (!DEMO_USERS[username]) return;
-
-            // Update details
-            DEMO_USERS[username].name = name;
-            DEMO_USERS[username].target = target;
+            if (!username) return alert('ইউজার নির্বাচন করুন।');
+            const user = DEMO_USERS[username];
+            
             if (newPassword) {
-                DEMO_USERS[username].password = newPassword;
+                user.password = newPassword;
             }
+            user.name = newName;
+            user.target = newTarget;
+            user.role = newRole; // Role update is allowed unless it's 'admin' (handled in loadUserForEdit)
 
             saveAllData();
-            alert(`ইউজার "${username}" আপডেট করা হয়েছে।`);
-            // The function must be called again to update the dropdown option text
-            populateUserEditDropdown(); 
+            alert(`ইউজার "${newName}" এর তথ্য আপডেট হয়েছে।`);
+            populateUserEditDropdown();
         };
 
         function deleteUser() {
             const username = document.getElementById('editUsername').value;
-            
-            if (username === 'admin') {
-                alert('সুপার অ্যাডমিন ইউজার ডিলিট করা যাবে না।');
+            if (!username || username === 'admin') {
+                alert('অ্যাডমিন ইউজারকে ডিলিট করা যাবে না, অথবা কোনো ইউজার নির্বাচন করা হয়নি।');
                 return;
             }
-            
-            if (confirm(`আপনি কি সত্যিই ইউজার "${username}" ডিলিট করতে চান?`)) {
-                // Reassign customers to the primary admin
-                customers = customers.map(c => {
+
+            if (confirm(`আপনি কি নিশ্চিত যে আপনি ইউজার "${username}" ডিলিট করতে চান?`)) {
+                delete DEMO_USERS[username];
+                
+                // Reassign this user's customers to the Admin
+                customers.forEach(c => {
                     if (c.collector === username) {
-                        c.collector = 'admin'; 
+                        c.collector = 'admin';
                     }
-                    return c;
                 });
 
-                // Remove user and their transactions
-                delete DEMO_USERS[username];
-                transactions = transactions.filter(t => t.collector !== username);
-
                 saveAllData();
-                alert(`ইউজার "${username}" সফলভাবে ডিলিট হয়েছে। গ্রাহকদের অ্যাডমিনের কাছে পুনরায় বরাদ্দ করা হয়েছে।`);
-                document.getElementById('editUserForm').reset();
                 populateUserEditDropdown();
+                alert(`ইউজার "${username}" সফলভাবে ডিলিট করা হয়েছে।`);
             }
         }
-
-        // --- 12. Bulk Print & Misc. Logic ---
+        
+        function autoGenerateBill() {
+            if (confirm('আপনি কি নিশ্চিত যে আপনি সকল সক্রিয় গ্রাহকের জন্য মাসিক বিল বকেয়া (due: true) সেট করতে চান? এটি একটি নতুন মাস শুরু করার জন্য ব্যবহার করা হয়।')) {
+                let updatedCount = 0;
+                customers.forEach(c => {
+                    if (c.status === 'Active') {
+                        c.due = true;
+                        updatedCount++;
+                    }
+                });
+                saveAllData();
+                alert(`সফলভাবে ${updatedCount} জন গ্রাহকের জন্য মাসিক বিল জেনারেট/বকেয়া করা হয়েছে।`);
+                updateDashboard();
+                renderCustomerTable();
+            }
+        }
+        
+        let dueCustomersForPrint = [];
         
         function openBulkDuePrintModal() {
-            const modal = document.getElementById('bulkPrintModal');
+            dueCustomersForPrint = customers.filter(c => c.due && c.status === 'Active');
             const tableBody = document.querySelector('#dueCustomersTable tbody');
             tableBody.innerHTML = '';
-            
-            const dueCustomers = customers.filter(c => c.due && c.status === 'Active');
 
-            if (dueCustomers.length === 0) {
-                alert('এই মুহূর্তে কোনো বকেয়া গ্রাহক নেই।');
+            if (dueCustomersForPrint.length === 0) {
+                alert('বর্তমানে কোনো বকেয়া বিল নেই।');
                 return;
             }
             
-            dueCustomers.forEach(c => {
+            dueCustomersForPrint.forEach(c => {
                 const row = tableBody.insertRow();
-                // Set default amount to package price
                 row.innerHTML = `
                     <td>${c.id}</td>
                     <td>${c.name}</td>
                     <td>${c.area}</td>
                     <td>৳ ${c.package}</td>
-                    <td>
-                        <input type="number" data-customer-id="${c.id}" value="${c.package}" min="10" style="width: 100%; padding: 5px;" class="due-amount-input">
-                    </td>
+                    <td><input type="number" class="print-amount-input" data-id="${c.id}" value="${c.package}" min="0" style="width: 100%; padding: 8px;"></td>
                 `;
             });
-            modal.style.display = 'block';
-        }
 
+            document.getElementById('bulkPrintModal').style.display = 'block';
+        }
+        
         function closeBulkPrintModal() {
             document.getElementById('bulkPrintModal').style.display = 'none';
         }
         
         function applyDefaultAmount() {
             const defaultAmount = parseInt(document.getElementById('defaultAmountInput').value);
-            if (isNaN(defaultAmount) || defaultAmount < 10) {
-                alert('অনুগ্রহ করে একটি বৈধ ডিফল্ট বিল পরিমাণ সেট করুন (কমপক্ষে ১০ টাকা)।');
+            if (isNaN(defaultAmount) || defaultAmount < 0) {
+                alert('একটি বৈধ পরিমাণ দিন।');
                 return;
             }
             
-            const inputs = document.querySelectorAll('.due-amount-input');
-            inputs.forEach(input => {
+            document.querySelectorAll('.print-amount-input').forEach(input => {
                 input.value = defaultAmount;
             });
-            alert(`সকল আদায়ের পরিমাণ ৳${defaultAmount} সেট করা হয়েছে।`);
         }
-
+        
         function generateBulkPrint() {
-            const inputs = document.querySelectorAll('.due-amount-input');
-            const printData = [];
+            const inputs = document.querySelectorAll('.print-amount-input');
+            let printContent = '<h1>📃 বকেয়া বিল নোটিশ (মাসিক)</h1><div style="page-break-after: always;"></div>';
             
             inputs.forEach(input => {
-                const customerId = parseInt(input.getAttribute('data-customer-id'));
+                const id = parseInt(input.getAttribute('data-id'));
                 const amount = parseInt(input.value);
-                const customer = customers.find(c => c.id === customerId);
-
-                if (customer && amount >= 10) {
-                    printData.push({
-                        id: customer.id,
-                        name: customer.name,
-                        area: customer.area,
-                        package: customer.package,
-                        amountDue: amount,
-                        phone: customer.phone
-                    });
+                const customer = customers.find(c => c.id === id);
+                
+                if (customer && amount > 0) {
+                    printContent += `
+                        <div style="border: 2px solid #333; padding: 15px; margin-bottom: 20px;">
+                            <h3 style="color: #dc3545;">🚨 বকেয়া বিল নোটিশ</h3>
+                            <p><strong>নাম:</strong> ${customer.name} (ID: ${customer.id})</p>
+                            <p><strong>এরিয়া:</strong> ${customer.area}</p>
+                            <p><strong>ফোন:</strong> ${customer.phone}</p>
+                            <hr>
+                            <p><strong>মাসিক প্যাকেজ:</strong> ৳ ${customer.package}</p>
+                            <h2 style="color: #dc3545;">মোট আদায়ের পরিমাণ: ৳ ${amount}</h2>
+                            <small>শেষ পরিশোধের তারিখ: ______________</small>
+                            <p style="margin-top: 10px;">সংগ্রহকারী স্বাক্ষর: _________________</p>
+                        </div>
+                        <div style="page-break-after: always;"></div>
+                    `;
                 }
             });
-            
-            if (printData.length === 0) {
-                alert('প্রিন্টের জন্য কোনো বৈধ ডেটা নেই।');
-                return;
-            }
 
-            // --- Print Logic Simulation ---
-            let printContent = `
-                <html>
-                <head>
-                    <title>বাল্ক বকেয়া বিল প্রিন্ট</title>
-                    <style>
-                        body { font-family: 'Arial', sans-serif; margin: 0; padding: 10px; }
-                        .bill-slip { border: 2px dashed #000; padding: 15px; margin-bottom: 20px; page-break-after: always; width: 300px; float: left; margin-right: 20px;}
-                        .bill-slip h4 { margin: 5px 0; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
-                        .bill-slip p { margin: 2px 0; font-size: 0.9em; }
-                        @media print {
-                            .bill-slip { border: 1px solid #000; page-break-inside: avoid; margin-right: 0; }
-                            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                        }
-                    </style>
-                </head>
-                <body>
-            `;
-            
-            printData.forEach(item => {
-                printContent += `
-                    <div class="bill-slip">
-                        <h4>⭐ বকেয়া বিল (নোটিশ)</h4>
-                        <p><strong>গ্রাহক আইডি:</strong> ${item.id}</p>
-                        <p><strong>নাম:</strong> ${item.name}</p>
-                        <p><strong>ফোন:</strong> ${item.phone}</p>
-                        <p><strong>এরিয়া:</strong> ${item.area}</p>
-                        <p><strong>মাসিক প্যাকেজ:</strong> ৳ ${item.package}</p>
-                        <p style="font-size: 1.1em; color: #dc3545;"><strong>মোট বকেয়া: ৳ ${item.amountDue}</strong></p>
-                        <small>অনুগ্রহ করে দ্রুত বিল পরিশোধ করুন।</small>
-                    </div>
-                `;
-            });
-            
-            printContent += `</body></html>`;
-            
             const printWindow = window.open('', '_blank');
+            printWindow.document.write('<html><head><title>বাল্ক প্রিন্ট</title>');
+            printWindow.document.write('<style>body{font-family: Arial, sans-serif; line-height: 1.6;}</style>');
+            printWindow.document.write('</head><body>');
             printWindow.document.write(printContent);
+            printWindow.document.write('</body></html>');
             printWindow.document.close();
-            printWindow.focus();
             printWindow.print();
-            // --- End Print Logic Simulation ---
-            
-            closeBulkPrintModal();
-            alert(`${printData.length} টি বকেয়া গ্রাহকের জন্য প্রিন্ট ডকুমেন্ট তৈরি করা হয়েছে।`);
         }
-        
-        // --- 13. Data Export Logic ---
+
         function exportData(format) {
-             if (currentRole !== USER_ROLES.ADMIN) {
-                alert('এই অ্যাকশনের জন্য আপনার পর্যাপ্ত অনুমতি নেই।');
-                return;
-            }
+            const dataToExport = {
+                users: DEMO_USERS,
+                areas: DEMO_AREAS,
+                customers: customers,
+                transactions: transactions
+            };
+
             if (format === 'json') {
-                const fullData = {
-                    users: DEMO_USERS,
-                    areas: DEMO_AREAS,
-                    customers: customers,
-                    transactions: transactions,
-                    lastBackup: localStorage.getItem(LOCAL_STORAGE_KEYS.LAST_BACKUP)
-                };
-                
-                const jsonString = JSON.stringify(fullData, null, 2);
-                const blob = new Blob([jsonString], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.setAttribute('href', url);
-                link.setAttribute('download', `billing_system_backup_${new Date().toLocaleDateString('en-CA')}.json`);
+                const jsonContent = JSON.stringify(dataToExport, null, 2);
+                const blob = new Blob([jsonContent], { type: 'application/json' });
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.setAttribute("download", "billing_system_backup.json");
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
-                alert('সম্পূর্ণ ডেটা ব্যাকআপ (JSON) ডাউনলোড শুরু হয়েছে।');
+                alert('সম্পূর্ণ ডেটা JSON ফাইল হিসেবে এক্সপোর্ট করা হয়েছে।');
             } else if (format === 'csv') {
-                // Export Customer Data to CSV
-                const headers = ["ID", "নাম", "ফোন", "এরিয়া", "প্যাকেজ (৳)", "স্ট্যাটাস", "বকেয়া", "কালেক্টর"];
-                const csvData = customers.map(c => [
-                    c.id,
-                    `"${c.name}"`,
-                    `"${c.phone}"`,
-                    `"${c.area}"`,
-                    c.package,
-                    `"${c.status}"`,
-                    `"${c.due ? 'হ্যাঁ' : 'না'}"`,
-                    `"${DEMO_USERS[c.collector] ? DEMO_USERS[c.collector].name : 'N/A'}"`
-                ]);
-                
-                let csvContent = headers.join(",") + "\n";
-                csvData.forEach(row => {
-                    csvContent += row.join(",") + "\n";
-                });
-                
-                const blob = new Blob(["\ufeff", csvContent], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.setAttribute('href', url);
-                link.setAttribute('download', `customer_list_${new Date().toLocaleDateString('en-CA')}.csv`);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                alert('গ্রাহক ডেটা CSV এক্সপোর্ট শুরু হয়েছে।');
+                // Export customers to CSV
+                exportCustomerToCSV(); 
             }
         }
         
+        function exportCustomerToCSV() {
+            const header = ["আইডি", "নাম", "ফোন", "এরিয়া", "প্যাকেজ", "স্ট্যাটাস", "বকেয়া", "কালেক্টর"];
+            
+            const csvRows = customers.map(c => [
+                c.id,
+                c.name,
+                c.phone,
+                c.area,
+                c.package,
+                c.status,
+                c.due ? 'হ্যাঁ' : 'না',
+                c.collector
+            ].map(String).map(s => `"${s.replace(/"/g, '""')}"`).join(','));
 
-        // --- 14. Initialization ---
+            const csvContent = [header.join(','), ...csvRows].join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute("download", "customer_data.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
 
+        // --- 11. Initialization ---
+        
         function initializeApp() {
             // Load data first
             loadInitialData();
@@ -1738,7 +1665,8 @@
                 document.getElementById('loginScreen').style.display = 'none';
                 document.getElementById('mainApp').style.display = 'block';
                 applyRolePermissions();
-                startAutoBackup(); // Start the auto-backup loop when logged in
+                startAutoBackup();      // Local Storage backup starts here
+                startGitHubAutoBackup(); // GitHub backup starts here
             } else {
                  document.getElementById('loginScreen').style.display = 'flex';
                  document.getElementById('mainApp').style.display = 'none';
@@ -1765,4 +1693,3 @@
     </script>
 </body>
 </html>
-
