@@ -189,9 +189,9 @@
                 </div>
                 
                 <div class="data-section">
-                    <h3>শেষ অটো ব্যাকআপ স্ট্যাটাস</h3>
+                    <h3>শেষ অটো ব্যাকআপ স্ট্যাটাস (GitHub)</h3>
                     <p style="font-size: 0.9em;">শেষ সফল ব্যাকআপ সময়: <strong id="lastBackupTime" style="color: var(--secondary-color);">লোড হচ্ছে...</strong></p>
-                    <small>ডেটা প্রতি ১০ মিনিট পর পর লোকাল স্টোরেজ এবং GitHub-এ স্বয়ংক্রিয়ভাবে সেভ হবে।</small>
+                    <small>ডেটা প্রতি ১৫ সেকেন্ড পর পর স্বয়ংক্রিয়ভাবে GitHub-এ সেভ হবে।</small>
                 </div>
 
                 <div class="data-section">
@@ -483,34 +483,85 @@
 
     <script>
         // ----------------------------------------------------------------------
-        //  নতুন কোড: গিটহাব স্বয়ংক্রিয় ব্যাকআপ (GitHub Auto Backup)
+        //  GitHub স্বয়ংক্রিয় ব্যাকআপ (GitHub Auto Backup) - সংশোধিত
         // ----------------------------------------------------------------------
 
         // !!! নিরাপত্তা সতর্কতা: নিচের ভ্যালুগুলো PUBLICLY EXPOSED হবে। 
         // শুধু 'repo' স্কোপে সীমিত অ্যাক্সেস সহ একটি PAT ব্যবহার করুন।
         // --- ধাপ ১: নিচের প্লেসহোল্ডারগুলো আপনার নিজস্ব মান দিয়ে প্রতিস্থাপন করুন ---
         const GITHUB_PAT = 'YOUR_GITHUB_PERSONAL_ACCESS_TOKEN'; // <<<<<<< ১. এটি পরিবর্তন করুন
-        const REPO_OWNER = 'brotherslink365';             // <<<<<<< ২. এটি পরিবর্তন করুন (সিনট্যাক্স ত্রুটি ঠিক করা হয়েছে)
+        const REPO_OWNER = 'brotherslink365';             // <<<<<<< ২. এটি পরিবর্তন করুন
         const REPO_NAME = 'BN-billing-system-app';               // <<<<<<< ৩. এটি পরিবর্তন করুন
         // ------------------------------------------------------------------------
 
-        const BACKUP_FILE_PATH = 'billing_system_backup.json';    // রিপোজিটরিতে ডেটা এই নামে সেভ হবে
-        const GITHUB_BACKUP_INTERVAL_MS = 600000; // গিটহাব ব্যাকআপ ইন্টারভাল: 10 মিনিট (10 * 60 * 1000)
+        const BACKUP_FILE_PATH = 'billing_system_backup.json';    
+        // *** সংশোধিত: গিটহাব ব্যাকআপ ইন্টারভাল এখন ১৫ সেকেন্ড
+        const GITHUB_BACKUP_INTERVAL_MS = 15000; // 15 সেকেন্ড (15 * 1000)
         let gitHubBackupInterval;
 
 
         // লোকাল স্টোরেজ থেকে ব্যাকআপের জন্য ডেটা সংগ্রহ করে JSON স্ট্রিং হিসাবে রিটার্ন করে
         function getLocalDataForBackup() {
             const backupData = {};
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                // আমরা কিছু ক্ষণস্থায়ী বা লগইন সম্পর্কিত কী (Key) বাদ দিচ্ছি
-                if (key !== 'darkMode' && key !== 'currentRole' && key !== 'currentUsername') {
-                    backupData[key] = localStorage.getItem(key);
+            // শুধুমাত্র ডেটা-সংক্রান্ত কীগুলো সংগ্রহ করা হবে
+            const keysToBackup = [
+                LOCAL_STORAGE_KEYS.USERS, 
+                LOCAL_STORAGE_KEYS.AREAS, 
+                LOCAL_STORAGE_KEYS.CUSTOMERS, 
+                LOCAL_STORAGE_KEYS.TRANSACTIONS
+            ];
+
+            keysToBackup.forEach(key => {
+                const data = localStorage.getItem(key);
+                if (data) {
+                    backupData[key] = data;
                 }
-            }
+            });
+            
+            // লগইন সম্পর্কিত এবং মোড সম্পর্কিত ডেটাও সেভ করে রাখা হচ্ছে যাতে রিলোড করলে লগইন থাকে
+            backupData['currentRole'] = localStorage.getItem('currentRole') || null;
+            backupData['currentUsername'] = localStorage.getItem('currentUsername') || null;
+            backupData['darkMode'] = localStorage.getItem('darkMode') || null;
+
             return JSON.stringify(backupData, null, 2); // সুন্দর ফরম্যাটে JSON তৈরি
         }
+        
+        // গিটহাব থেকে ডেটা লোড করার জন্য নতুন ফাংশন
+        async function loadDataFromGitHub() {
+            if (GITHUB_PAT === 'YOUR_GITHUB_PERSONAL_ACCESS_TOKEN') {
+                console.warn('GitHub PAT কনফিগার করা হয়নি। লোকাল ফলব্যাক ডেটা ব্যবহার করা হচ্ছে।');
+                return null;
+            }
+
+            const contentUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${BACKUP_FILE_PATH}`;
+
+            try {
+                const getResponse = await fetch(contentUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `token ${GITHUB_PAT}`,
+                        'Accept': 'application/vnd.github.v3.raw' // Raw content পেতে
+                    }
+                });
+
+                if (getResponse.ok) {
+                    const rawJson = await getResponse.text();
+                    const githubData = JSON.parse(rawJson);
+                    console.log('ডেটা সফলভাবে GitHub থেকে লোড হয়েছে।');
+                    return githubData;
+                } else if (getResponse.status === 404) {
+                    console.log('GitHub-এ কোনো পূর্ববর্তী ব্যাকআপ ফাইল পাওয়া যায়নি। ডিফল্ট ডেটা ব্যবহার করা হচ্ছে।');
+                    return null;
+                } else {
+                    console.error('GitHub থেকে ডেটা লোড করতে ব্যর্থ:', getResponse.status, await getResponse.json());
+                    return null;
+                }
+            } catch (error) {
+                console.error('GitHub ডেটা লোড প্রক্রিয়ায় ত্রুটি:', error);
+                return null;
+            }
+        }
+
 
         // গিটহাব API ব্যবহার করে ডেটা ব্যাকআপের মূল ফাংশন
         async function backupDataToGitHub() {
@@ -566,9 +617,9 @@
 
                 if (putResponse.ok) {
                     const now = new Date().toLocaleString('bn-BD');
-                    localStorage.setItem('lastGitHubBackupTime', now); // গিটহাব ব্যাকআপের সময় ট্র্যাক করার জন্য নতুন কী
-                    document.getElementById('lastBackupTime').textContent = now + ' (GitHub)'; // ড্যাশবোর্ড আপডেট
-                    console.log('ডেটা সফলভাবে GitHub-এ ব্যাকআপ হয়েছে!');
+                    localStorage.setItem(LOCAL_STORAGE_KEYS.LAST_BACKUP, now); // লোকাল স্টোরেজে শুধু GitHub ব্যাকআপের সময় ট্র্যাক করার জন্য রাখা হলো
+                    document.getElementById('lastBackupTime').textContent = now; // ড্যাশবোর্ড আপডেট
+                    console.log(`[GitHub Backup] ডেটা সফলভাবে GitHub-এ ব্যাকআপ হয়েছে! ${now}`);
                 } else {
                     console.error('GitHub ব্যাকআপ ব্যর্থ:', await putResponse.json());
                 }
@@ -583,18 +634,18 @@
             if (gitHubBackupInterval) {
                 clearInterval(gitHubBackupInterval);
             }
-            // একবার অবিলম্বে চালানো এবং তারপর প্রতি 10 মিনিটে
-            backupDataToGitHub();
+            // একবার অবিলম্বে চালানো এবং তারপর প্রতি 15 সেকেন্ডে
+            backupDataToGitHub(); 
             gitHubBackupInterval = setInterval(backupDataToGitHub, GITHUB_BACKUP_INTERVAL_MS);
         }
 
         // ----------------------------------------------------------------------
-        //  আপনার অরিজিনাল কোড
+        //  আপনার অরিজিনাল কোড - লোকাল সেভ ফাংশন এবং লজিক মুছে ফেলা হয়েছে
         // ----------------------------------------------------------------------
+        
         // --- 1. Global State & Initial Data ---
         const USER_ROLES = { ADMIN: 'admin', COLLECTOR: 'collector' };
         
-        // Data loading will now happen through a single consolidated function
         let DEMO_USERS;
         let DEMO_AREAS;
         let customers;
@@ -607,7 +658,7 @@
             AREAS: 'billingAreas',
             CUSTOMERS: 'billingCustomers',
             TRANSACTIONS: 'billingTransactions',
-            LAST_BACKUP: 'lastAutoBackupTime' // Local storage backup time
+            LAST_BACKUP: 'lastGitHubBackupTime' // এখন শুধু GitHub ব্যাকআপের সময় ট্র্যাক করবে
         };
 
         // Default initial data for first run
@@ -628,56 +679,86 @@
             ]
         };
         
-        // --- 2. Utility, Local Storage & Auto-Backup ---
-
-        function loadInitialData() {
-            DEMO_USERS = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.USERS)) || DEFAULT_DATA.users;
-            DEMO_AREAS = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.AREAS)) || DEFAULT_DATA.areas;
-            customers = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.CUSTOMERS)) || DEFAULT_DATA.customers;
-            transactions = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEYS.TRANSACTIONS)) || DEFAULT_DATA.transactions;
-        }
+        // --- 2. Utility & Data Loading ---
 
         /**
-         * Consolidates all data saving into one function for clean auto-backup.
+         * GitHub অথবা লোকাল স্টোরেজ থেকে ডেটা লোড করে। 
+         * GitHub থেকে লোড করতে পারলে, সেটাই চূড়ান্ত ডেটা হিসেবে লোকাল স্টোরেজে সংরক্ষণ করা হবে।
          */
+        async function loadInitialData() {
+            const githubData = await loadDataFromGitHub();
+            let sourceData = {};
+
+            if (githubData) {
+                // GitHub ডেটা থাকলে, তা লোকাল স্টোরেজে সেভ করা এবং অ্যাপের ভেরিয়েবলগুলোতে লোড করা
+                sourceData = githubData;
+                Object.keys(sourceData).forEach(key => {
+                    localStorage.setItem(key, sourceData[key]);
+                });
+            } else {
+                // GitHub ডেটা না থাকলে, লোকাল স্টোরেজ চেক করা হবে (যদি আগে সেভ হয়ে থাকে)
+                // অথবা ডিফল্ট ডেটা ব্যবহার করা হবে
+                if (localStorage.getItem(LOCAL_STORAGE_KEYS.USERS)) {
+                    // লোকাল স্টোরেজে ডেটা থাকলে, তা ব্যবহার
+                    sourceData = {
+                        [LOCAL_STORAGE_KEYS.USERS]: localStorage.getItem(LOCAL_STORAGE_KEYS.USERS),
+                        [LOCAL_STORAGE_KEYS.AREAS]: localStorage.getItem(LOCAL_STORAGE_KEYS.AREAS),
+                        [LOCAL_STORAGE_KEYS.CUSTOMERS]: localStorage.getItem(LOCAL_STORAGE_KEYS.CUSTOMERS),
+                        [LOCAL_STORAGE_KEYS.TRANSACTIONS]: localStorage.getItem(LOCAL_STORAGE_KEYS.TRANSACTIONS),
+                    };
+                } else {
+                    // ডিফল্ট ডেটা ব্যবহার
+                    sourceData = {
+                        [LOCAL_STORAGE_KEYS.USERS]: JSON.stringify(DEFAULT_DATA.users),
+                        [LOCAL_STORAGE_KEYS.AREAS]: JSON.stringify(DEFAULT_DATA.areas),
+                        [LOCAL_STORAGE_KEYS.CUSTOMERS]: JSON.stringify(DEFAULT_DATA.customers),
+                        [LOCAL_STORAGE_KEYS.TRANSACTIONS]: JSON.stringify(DEFAULT_DATA.transactions),
+                    };
+                    // ডিফল্ট ডেটা প্রথমে লোকাল স্টোরেজে সেভ করা হলো, যাতে GitHub ব্যাকআপে যায়
+                    Object.keys(sourceData).forEach(key => {
+                        localStorage.setItem(key, sourceData[key]);
+                    });
+                }
+            }
+            
+            // অবশেষে, গ্লোবাল ভেরিয়েবলগুলোতে ডেটা লোড করা
+            DEMO_USERS = JSON.parse(sourceData[LOCAL_STORAGE_KEYS.USERS]);
+            DEMO_AREAS = JSON.parse(sourceData[LOCAL_STORAGE_KEYS.AREAS]);
+            customers = JSON.parse(sourceData[LOCAL_STORAGE_KEYS.CUSTOMERS]);
+            transactions = JSON.parse(sourceData[LOCAL_STORAGE_KEYS.TRANSACTIONS]);
+        }
+
+
+        // *** সংশোধিত: saveAllData ফাংশনটি এখন শুধুমাত্র লোকাল স্টোরেজে ভ্যালুগুলো সেভ করে 
+        // GitHub এ ব্যাকআপ করার জন্য ডেটা রেডি করে।
         function saveAllData() {
+            // ডেটা পরিবর্তনের সাথে সাথেই লোকাল স্টোরেজে আপডেট করা, 
+            // যাতে ১৫ সেকেন্ড পর GitHub ব্যাকআপ করার সময় সর্বশেষ ডেটা পায়
             localStorage.setItem(LOCAL_STORAGE_KEYS.USERS, JSON.stringify(DEMO_USERS));
             localStorage.setItem(LOCAL_STORAGE_KEYS.AREAS, JSON.stringify(DEMO_AREAS));
             localStorage.setItem(LOCAL_STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
             localStorage.setItem(LOCAL_STORAGE_KEYS.TRANSACTIONS, JSON.stringify(transactions));
 
-            // Update the last local storage backup time
-            const now = new Date().toLocaleString('bn-BD');
-            localStorage.setItem(LOCAL_STORAGE_KEYS.LAST_BACKUP, now);
-            // Update the display to show the most recent backup time
-            updateBackupTimeDisplay();
-            console.log(`[Local Backup] Data saved successfully to LocalStorage at ${now}`);
+            console.log('[Local Data Update] Data updated in LocalStorage, ready for GitHub backup.');
+            
+            // কোনো পরিবর্তন হলেই GitHub এ সেভ করার জন্য ট্রিগার করা
+            backupDataToGitHub();
         }
 
-        // Local Storage Auto-Backup Setup
-        const AUTO_BACKUP_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
-        let autoBackupInterval;
-
+        // *** সংশোধিত: startAutoBackup ফাংশনটি আর প্রয়োজন নেই, কারণ এখন শুধুমাত্র GitHub Auto Backup ব্যবহার করা হবে
+        // তবে নাম ঠিক রেখে ফাংশনটি রাখা হলো যাতে পুরনো কোডে কোনো সমস্যা না হয়।
         function startAutoBackup() {
-            if (autoBackupInterval) {
-                clearInterval(autoBackupInterval);
-            }
-            // Save immediately on start
-            saveAllData();
-            autoBackupInterval = setInterval(saveAllData, AUTO_BACKUP_INTERVAL_MS);
+             // শুধুমাত্র GitHub ব্যাকআপ শুরু করে।
+             startGitHubAutoBackup(); 
         }
 
         function updateBackupTimeDisplay() {
-            // Updated to check both GitHub and Local times
-            const lastGitHubTime = localStorage.getItem('lastGitHubBackupTime');
-            const lastLocalTime = localStorage.getItem(LOCAL_STORAGE_KEYS.LAST_BACKUP);
+            // শুধুমাত্র GitHub ব্যাকআপ টাইম দেখাবে
+            const lastGitHubTime = localStorage.getItem(LOCAL_STORAGE_KEYS.LAST_BACKUP);
             let displayTime = 'কখনো ব্যাকআপ হয়নি।';
             
-            // Prioritize GitHub backup time for display if available
             if (lastGitHubTime) {
-                displayTime = `${lastGitHubTime} (GitHub)`;
-            } else if (lastLocalTime) {
-                displayTime = `${lastLocalTime} (Local)`;
+                displayTime = `${lastGitHubTime}`;
             }
             document.getElementById('lastBackupTime').textContent = displayTime;
         }
@@ -690,8 +771,6 @@
             return transactions.length > 0 ? Math.max(...transactions.map(t => t.id)) + 1 : 1;
         }
         
-        // নতুন আইডি জেনারেটর
-
         function toggleDarkMode(isDark) {
             document.body.classList.toggle('dark-mode', isDark);
             localStorage.setItem('darkMode', isDark);
@@ -713,10 +792,8 @@
                 document.getElementById('loginScreen').style.display = 'none';
                 document.getElementById('mainApp').style.display = 'block';
                 
-                // <<< এইখানে initializeApp() কলটি সরিয়ে প্রয়োজনীয় ফাংশনগুলো যোগ করা হয়েছে (Fix) >>>
                 applyRolePermissions(); 
-                startAutoBackup();      
-                startGitHubAutoBackup();
+                startAutoBackup();      // GitHub Auto Backup শুরু করবে
                 
             } else {
                 messageEl.textContent = 'ভুল ইউজারনেম বা পাসওয়ার্ড।';
@@ -724,16 +801,14 @@
         }
 
         function logout() {
-            // Save data before logging out
-            saveAllData();
+            // লগআউট করার আগে একবার সেভ করা হলো
+            saveAllData(); 
             localStorage.removeItem('currentRole');
             localStorage.removeItem('currentUsername');
             document.getElementById('mainApp').style.display = 'none';
             document.getElementById('loginScreen').style.display = 'flex';
-            // Stop both auto backup intervals
-            if (autoBackupInterval) {
-                clearInterval(autoBackupInterval);
-            }
+            
+            // Stop auto backup interval
             if (gitHubBackupInterval) {
                 clearInterval(gitHubBackupInterval);
             }
@@ -755,7 +830,7 @@
 
         // --- 4. Navigation & Responsive UI ---
         function showView(viewId) {
-            // Save data on view change for redundancy
+            // ডেটা পরিবর্তনের সাথে সাথে GitHub এ সেভ হবে
             saveAllData(); 
             
             const views = document.querySelectorAll('.content-view');
@@ -921,7 +996,7 @@
                 alert('নতুন গ্রাহক সফলভাবে যোগ করা হয়েছে। আইডি: ' + newCustomer.id);
             }
 
-            saveAllData();
+            saveAllData(); // ডেটা সেভ
             renderCustomerTable();
             closeCustomerModal();
         });
@@ -929,7 +1004,7 @@
         function deleteCustomer(customerId) {
             if (confirm('আপনি কি নিশ্চিত যে আপনি এই গ্রাহককে ডিলিট করতে চান? এই অ্যাকশন বাতিল করা যাবে না।')) {
                 customers = customers.filter(c => c.id !== customerId);
-                saveAllData();
+                saveAllData(); // ডেটা সেভ
                 renderCustomerTable();
             }
         }
@@ -1106,8 +1181,8 @@
             // 2. Update customer status (assuming a payment clears the due status)
             customer.due = false; 
 
-            // 3. Save all data
-            saveAllData();
+            // 3. Save all data (Triggers GitHub Backup)
+            saveAllData(); 
 
             // 4. Reset form and update views
             document.getElementById('billCollectionForm').reset();
@@ -1266,7 +1341,7 @@
             const newAreaName = document.getElementById('newAreaName').value.trim();
             if (newAreaName && !DEMO_AREAS.includes(newAreaName)) {
                 DEMO_AREAS.push(newAreaName);
-                saveAllData();
+                saveAllData(); // ডেটা সেভ
                 populateAreaManagement();
                 alert(`নতুন এরিয়া "${newAreaName}" যোগ করা হয়েছে।`);
                 document.getElementById('addAreaForm').reset();
@@ -1297,7 +1372,7 @@
                     }
                 });
 
-                saveAllData();
+                saveAllData(); // ডেটা সেভ
                 populateAreaManagement();
                 alert(`এরিয়া "${oldArea}" থেকে "${newAreaName}"-এ আপডেট করা হয়েছে।`);
             }
@@ -1319,7 +1394,7 @@
                     }
                 });
 
-                saveAllData();
+                saveAllData(); // ডেটা সেভ
                 populateAreaManagement();
                 alert(`এরিয়া "${areaToDelete}" সফলভাবে ডিলিট করা হয়েছে।`);
              }
@@ -1367,7 +1442,7 @@
             }
 
             DEMO_USERS[username] = { password, role, name, target };
-            saveAllData();
+            saveAllData(); // ডেটা সেভ
             populateUserEditDropdown();
             alert(`নতুন ইউজার "${name}" (${username}) সফলভাবে যোগ করা হয়েছে।`);
             document.getElementById('addUserForm').reset();
@@ -1389,7 +1464,7 @@
                 user.password = newPassword;
             }
 
-            saveAllData();
+            saveAllData(); // ডেটা সেভ
             populateUserEditDropdown();
             alert(`ইউজার "${name}" এর তথ্য সফলভাবে আপডেট করা হয়েছে।`);
         });
@@ -1408,7 +1483,7 @@
                          c.collector = 'admin';
                      }
                  });
-                 saveAllData();
+                 saveAllData(); // ডেটা সেভ
                  populateUserEditDropdown();
                  alert(`ইউজার "${username}" সফলভাবে ডিলিট করা হয়েছে।`);
             }
@@ -1421,7 +1496,7 @@
             customers.filter(c => c.status === 'Active').forEach(c => {
                 c.due = true; // Mark all active customers as due for the new month
             });
-            saveAllData();
+            saveAllData(); // ডেটা সেভ
             updateDashboard();
             alert('মাসিক বিল জেনারেশন সফল হয়েছে। সকল সক্রিয় গ্রাহকের বকেয়া স্ট্যাটাস আপডেট করা হয়েছে।');
         }
@@ -1453,6 +1528,7 @@
                 alert('গ্রাহক ডেটা CSV-এ এক্সপোর্ট করা হয়েছে।');
 
             } else if (format === 'json') {
+                // GitHub এ পাঠানোর জন্য যে ডেটা তৈরি হয়, সেটাই ডাউনলোড করা হলো
                 const fullBackupData = getLocalDataForBackup();
                 const blob = new Blob([fullBackupData], { type: 'application/json' });
                 const link = document.createElement('a');
@@ -1563,8 +1639,9 @@
 
 
         // --- 11. Initialization ---
-        function initializeApp() {
-            loadInitialData();
+        async function initializeApp() {
+            // ডেটা লোড করার জন্য অপেক্ষা করা
+            await loadInitialData();
             
             // Set up navigation listeners
             document.querySelectorAll('.nav-link').forEach(link => {
@@ -1579,11 +1656,11 @@
                 toggleDarkMode(this.checked);
             });
             
-            // Check for Dark Mode preference
+            // Check for Dark Mode preference (লোকাল স্টোরেজ থেকে)
             const isDark = localStorage.getItem('darkMode') === 'true';
             toggleDarkMode(isDark);
 
-            // Auto-Login Check (Only runs on page load, not when called from login())
+            // Auto-Login Check (লোকাল স্টোরেজ থেকে)
             const storedRole = localStorage.getItem('currentRole');
             const storedUsername = localStorage.getItem('currentUsername');
             
@@ -1593,8 +1670,7 @@
                 document.getElementById('loginScreen').style.display = 'none';
                 document.getElementById('mainApp').style.display = 'block';
                 applyRolePermissions();
-                startAutoBackup();      // Local Storage backup starts here
-                startGitHubAutoBackup(); // GitHub backup starts here
+                startAutoBackup();      // GitHub Auto Backup শুরু করবে
             } else {
                  document.getElementById('loginScreen').style.display = 'flex';
                  document.getElementById('mainApp').style.display = 'none';
@@ -1608,6 +1684,3 @@
     </script>
 </body>
 </html>
-
-
-
