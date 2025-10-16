@@ -135,7 +135,6 @@
             <button onclick="login()">লগইন করুন</button>
             <p id="loginMessage" style="color: red; margin-top: 10px;"></p>
             <div class="login-info" style="margin-top: 20px;">
-                <p>🔐 **লগইন তথ্য:** অ্যাডমিন: `admin` / `*****` | কালেক্টর: `rahim` / `*****`</p>
             </div>
         </div>
     </div>
@@ -267,12 +266,12 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="collectorId">কালেক্টর (অ্যাডমিন):</label>
+                            <label for="collectorId">কালেক্টর:</label>
                             <select id="collectorId" required></select>
                         </div>
                         <div class="form-group" style="grid-column: 1 / -1; text-align: right;">
-                            <button type="submit" class="btn-primary" style="margin-right: 10px;"><i class="fas fa-check"></i> বিল পরিশোধ করুন</button>
-                            <button type="button" class="btn-action" onclick="alert('অনুগ্রহ করে বিল পরিশোধ করুন, রিসিপ্ট স্বয়ংক্রিয়ভাবে জেনারেট হবে।')"><i class="fas fa-print"></i> ইনভয়েস/রিসিপ্ট</button>
+                            <button type="submit" class="btn-primary" id="submitBillBtn" style="margin-right: 10px;"><i class="fas fa-check"></i> বিল পরিশোধ করুন</button>
+                            <button type="button" class="btn-action" id="manualPrintBtn" onclick="alert('প্রিন্ট ফাংশনটি নতুনভাবে বিল পরিশোধের সাথে যুক্ত হয়েছে।')" style="display: none;"><i class="fas fa-print"></i> ইনভয়েস/রিসিপ্ট</button>
                         </div>
                     </form>
                 </div>
@@ -282,6 +281,16 @@
                 <h2>📈 রিপোর্ট ও অ্যানালিটিক্স</h2>
                 <div class="data-section">
                     <h3>বিল হিস্টরি</h3>
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; align-items: center;">
+                        <label for="startDate">শুরুর তারিখ:</label>
+                        <input type="date" id="startDate" style="width: 150px; padding: 8px;">
+                        
+                        <label for="endDate">শেষের তারিখ:</label>
+                        <input type="date" id="endDate" style="width: 150px; padding: 8px;">
+                        
+                        <button class="btn-primary" onclick="filterTransactionsByDate()" style="padding: 8px 15px;"><i class="fas fa-filter"></i> ফিল্টার</button>
+                        <button class="btn-action" onclick="exportTransactionToCSV()" style="padding: 8px 15px;"><i class="fas fa-file-csv"></i> CSV এক্সপোর্ট</button>
+                    </div>
                     <table>
                         <thead>
                             <tr>
@@ -291,10 +300,10 @@
                                 <th>আদায় (৳)</th>
                                 <th>পদ্ধতি</th>
                                 <th>কালেক্টর</th>
-                            </tr>
+                                <th>প্রিন্ট</th> </tr>
                         </thead>
                         <tbody id="transactionTableBody">
-                            <tr><td colspan="6" style="text-align: center;">কোনো লেনদেন রেকর্ড নেই।</td></tr>
+                            <tr><td colspan="7" style="text-align: center;">কোনো লেনদেন রেকর্ড নেই।</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -377,7 +386,7 @@
                         </div>
                         
                         <div class="full-width">
-                            <h4>ইউজার পাসওয়ার্ড পরিবর্তন / এডিট করুন</h4>
+                            <h4>ইউজার পাসওয়ার্ড পরিবর্তন / এডিট / ডিলিট করুন</h4>
                             <form id="editUserForm">
                                 <div class="form-group"><label for="editUsername">ইউজার নির্বাচন:</label>
                                     <select id="editUsername" required onchange="loadUserForEdit(this.value)"></select>
@@ -388,8 +397,12 @@
                                     <select id="editUserRole" required disabled></select>
                                 </div>
                                 <div class="form-group"><label for="editUserTarget">মাসিক টার্গেট (৳):</label><input type="number" id="editUserTarget" required min="1000"></div>
-                                <button type="submit" class="btn-action" style="width: 100%;"><i class="fas fa-save"></i> আপডেট করুন</button>
-                            </form>
+                                
+                                <div class="form-group" style="display: flex; gap: 10px;">
+                                    <button type="submit" class="btn-action" style="flex-grow: 1;"><i class="fas fa-save"></i> আপডেট করুন</button>
+                                    <button type="button" class="btn-danger" style="flex-grow: 1;" onclick="deleteUser()"><i class="fas fa-trash-alt"></i> ইউজার ডিলিট</button>
+                                </div>
+                                </form>
                         </div>
                     </div>
                 </div>
@@ -500,8 +513,9 @@
                 { id: 102, name: 'করিম শেখ', phone: '01822XXXXXX', area: 'দক্ষিণ', package: 750, status: 'Active', due: false, collector: 'admin' },
                 { id: 103, name: 'সাফিয়া বেগম', phone: '01933XXXXXX', area: 'পূর্ব', package: 600, status: 'Active', due: true, collector: 'rahim' },
             ],
+            // ডেট ফিল্টারিং সহজ করার জন্য ISOString ব্যবহার করা হয়েছে
             transactions: [
-                { id: 1, customerId: 102, customerName: 'করিম শেখ', package: 750, amount: 750, method: 'bKash', collector: 'admin', time: new Date().toLocaleString('bn-BD') }
+                { id: 1, customerId: 102, customerName: 'করিম শেখ', package: 750, amount: 750, method: 'bKash', collector: 'admin', time: new Date().toISOString() }
             ]
         };
         
@@ -550,6 +564,7 @@
         }
 
         function generateUniqueId() { return customers.length > 0 ? Math.max(...customers.map(c => c.id)) + 1 : 101; }
+        function generateTransactionId() { return transactions.length > 0 ? Math.max(...transactions.map(t => t.id)) + 1 : 1; } // নতুন আইডি জেনারেটর
 
         function toggleDarkMode(isDark) {
             document.body.classList.toggle('dark-mode', isDark);
@@ -612,7 +627,7 @@
         function showView(viewId) {
             // Save data on view change for redundancy
             saveAllData(); 
-            
+
             const views = document.querySelectorAll('.content-view');
             views.forEach(view => view.classList.remove('active-view'));
             const activeView = document.getElementById(viewId);
@@ -626,13 +641,24 @@
                 document.getElementById('sidebar').classList.remove('open');
             }
 
-            if (viewId === 'dashboard') { updateDashboard(); updateBackupTimeDisplay(); }
+            if (viewId === 'dashboard') {
+                updateDashboard();
+                updateBackupTimeDisplay();
+            }
             if (viewId === 'customers') renderCustomerTable();
-            if (viewId === 'billing') { filterBillingCustomers(''); populateCollectorDropdown(); }
-            if (viewId === 'reports') renderTransactionTable();
+            if (viewId === 'billing') {
+                filterBillingCustomers('');
+                populateCollectorDropdown(); // <--- UPDATED FUNCTION CALL
+            }
+            if (viewId === 'reports') {
+                // Clear filters on view change and render all transactions
+                document.getElementById('startDate').value = ''; 
+                document.getElementById('endDate').value = '';
+                renderTransactionTable();
+            }
             if (viewId === 'collectors' && currentRole === USER_ROLES.ADMIN) renderCollectorPerformance();
-            if (viewId === 'settings' && currentRole === USER_ROLES.ADMIN) { 
-                populateUserEditDropdown(); 
+            if (viewId === 'settings' && currentRole === USER_ROLES.ADMIN) {
+                populateUserEditDropdown();
                 populateAreaManagement();
             }
         }
@@ -644,24 +670,19 @@
         // --- 5. Dashboard Logic ---
 
         function updateDashboard() {
-            const relevantCustomers = currentRole === USER_ROLES.ADMIN
-                ? customers
-                : customers.filter(c => c.collector === currentUsername);
-            
-            const relevantTransactions = currentRole === USER_ROLES.ADMIN
-                ? transactions
-                : transactions.filter(t => t.collector === currentUsername);
+            const relevantCustomers = currentRole === USER_ROLES.ADMIN ? customers : customers.filter(c => c.collector === currentUsername);
+            const relevantTransactions = currentRole === USER_ROLES.ADMIN ? transactions : transactions.filter(t => t.collector === currentUsername);
 
             const dueCustomers = relevantCustomers.filter(c => c.due);
             const monthlyCollection = relevantTransactions.reduce((sum, t) => sum + t.amount, 0);
+
             const target = DEMO_USERS[currentUsername].target;
             const progress = (monthlyCollection / target) * 100;
-            
+
             document.getElementById('statActiveCustomers').textContent = relevantCustomers.filter(c => c.status === 'Active').length;
             document.getElementById('statDueAmount').textContent = `৳ ${dueCustomers.reduce((sum, c) => sum + c.package, 0).toLocaleString('bn-BD')}`;
             document.getElementById('statMonthlyCollection').textContent = `৳ ${monthlyCollection.toLocaleString('bn-BD')}`;
             document.getElementById('statFailedPayments').textContent = dueCustomers.length;
-
             document.getElementById('progressPercentage').textContent = `${Math.min(100, progress).toFixed(0)}%`;
             document.getElementById('monthlyTargetProgress').style.width = `${Math.min(100, progress)}%`;
 
@@ -671,12 +692,11 @@
         function renderAreaChart(custData, transData) {
             const areaChartEl = document.getElementById('areaChart');
             areaChartEl.innerHTML = '';
-            
+
             const areaCollections = {};
             const areas = [...new Set(custData.map(c => c.area))];
-            
             areas.forEach(area => areaCollections[area] = 0);
-            
+
             transData.forEach(t => {
                 const customer = custData.find(c => c.id === t.customerId);
                 if (customer) {
@@ -706,18 +726,17 @@
                 select.innerHTML += `<option value="${area}">${area}</option>`;
             });
             if (!DEMO_AREAS.includes('Unassigned')) {
-                 select.innerHTML += `<option value="Unassigned">Unassigned</option>`;
+                select.innerHTML += `<option value="Unassigned">Unassigned</option>`;
             }
         }
 
         function renderCustomerTable(filteredCustomers = customers) {
             const tableBody = document.getElementById('customerTableBody');
             tableBody.innerHTML = '';
-            const isAdmin = currentRole === USER_ROLES.ADMIN;
 
-            const relevantCustomers = isAdmin
-                ? filteredCustomers
-                : filteredCustomers.filter(c => c.collector === currentUsername);
+            const isAdmin = currentRole === USER_ROLES.ADMIN;
+            // **পরিবর্তিত কোড: কালেক্টর সহ সকল রোল এখন সকল গ্রাহককে দেখতে পারবে।**
+            const relevantCustomers = filteredCustomers; 
 
             if (relevantCustomers.length === 0) {
                 tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center;">কোনো গ্রাহক পাওয়া যায়নি।</td></tr>';
@@ -728,12 +747,12 @@
                 const row = tableBody.insertRow();
                 const dueText = customer.due ? 'হ্যাঁ' : 'না';
                 const dueColor = customer.due ? 'red' : 'green';
-                
+
                 // Contact Icons
                 const phoneLink = `tel:${customer.phone}`;
                 const smsLink = `sms:${customer.phone}`;
-                const whatsappLink = `https://wa.me/${customer.phone.replace(/[^0-9]/g, '')}`; 
-                
+                const whatsappLink = `https://wa.me/${customer.phone.replace(/[^0-9]/g, '')}`;
+
                 const contactIcons = `
                     <div class="contact-icons">
                         <a href="${phoneLink}" title="কল করুন" style="margin-right: 5px;"><i class="fas fa-phone-alt"></i></a>
@@ -754,7 +773,7 @@
                     <td>৳ ${customer.package}</td>
                     <td>${customer.status}</td>
                     <td style="color: ${dueColor}; font-weight: bold;">${dueText}</td>
-                    <td>${contactIcons}</td> 
+                    <td>${contactIcons}</td>
                     <td>${actionButtons}</td>
                 `;
             });
@@ -762,16 +781,20 @@
 
         document.getElementById('customerForm').onsubmit = function(e) {
             e.preventDefault();
+
             if (currentRole !== USER_ROLES.ADMIN) {
                 alert('এই অ্যাকশনের জন্য আপনার পর্যাপ্ত অনুমতি নেই। শুধুমাত্র অ্যাডমিনই গ্রাহক যোগ/আপডেট করতে পারে।');
                 return;
             }
+
             const id = document.getElementById('customerId').value;
             const name = document.getElementById('customerName').value;
             const phone = document.getElementById('customerPhone').value;
             const area = document.getElementById('customerArea').value;
             const pkg = parseInt(document.getElementById('customerPackage').value);
             const status = document.getElementById('customerStatus').value;
+            
+            const selectedCollectorUsername = getLeastBusyCollector(); // Assign to collector with least customers
 
             if (id) {
                 const index = customers.findIndex(c => c.id == id);
@@ -780,419 +803,708 @@
                 }
                 alert(`গ্রাহক ${name} আপডেট হয়েছে।`);
             } else {
-                const newCustomer = {
-                    id: generateUniqueId(),
-                    name, phone, area, package: pkg, status, due: true,
-                    collector: 'admin'
+                const newCustomer = { 
+                    id: generateUniqueId(), 
+                    name, 
+                    phone, 
+                    area, 
+                    package: pkg, 
+                    status, 
+                    due: true, // New customers start with a due/unpaid status
+                    collector: selectedCollectorUsername
                 };
                 customers.push(newCustomer);
-                alert(`নতুন গ্রাহক ${name} যোগ হয়েছে।`);
+                alert(`নতুন গ্রাহক ${name} যোগ করা হয়েছে। আইডি: ${newCustomer.id}`);
             }
 
             saveAllData();
-            renderCustomerTable();
             closeCustomerModal();
+            renderCustomerTable();
         };
 
         function openCustomerModal(mode, id = null) {
-            if (currentRole !== USER_ROLES.ADMIN && mode !== 'add') {
-                alert('শুধুমাত্র অ্যাডমিনই গ্রাহক তথ্য এডিট করতে পারবে।');
-                return;
-            }
-            populateAreaDropdown();
-
             const modal = document.getElementById('customerModal');
-            const form = document.getElementById('customerForm');
-            form.reset();
-            document.getElementById('customerId').value = '';
-            document.getElementById('customerModalTitle').textContent = mode === 'add' ? 'নতুন গ্রাহক যোগ' : 'গ্রাহক সম্পাদনা';
-            document.getElementById('customerSubmitBtn').textContent = mode === 'add' ? 'যোগ করুন' : 'আপডেট করুন';
+            const title = document.getElementById('customerModalTitle');
+            const submitBtn = document.getElementById('customerSubmitBtn');
 
-            if (mode === 'edit' && id) {
+            populateAreaDropdown();
+            
+            if (mode === 'add') {
+                title.textContent = 'নতুন গ্রাহক যোগ';
+                submitBtn.textContent = 'যোগ করুন';
+                document.getElementById('customerId').value = '';
+                document.getElementById('customerForm').reset();
+            } else if (mode === 'edit') {
                 const customer = customers.find(c => c.id === id);
-                if (customer) {
-                    document.getElementById('customerId').value = customer.id;
-                    document.getElementById('customerName').value = customer.name;
-                    document.getElementById('customerPhone').value = customer.phone;
-                    document.getElementById('customerArea').value = customer.area;
-                    document.getElementById('customerPackage').value = customer.package;
-                    document.getElementById('customerStatus').value = customer.status;
-                }
+                if (!customer) return;
+
+                title.textContent = `গ্রাহক এডিট: ${customer.name} (ID: ${customer.id})`;
+                submitBtn.textContent = 'আপডেট করুন';
+                
+                document.getElementById('customerId').value = customer.id;
+                document.getElementById('customerName').value = customer.name;
+                document.getElementById('customerPhone').value = customer.phone;
+                document.getElementById('customerArea').value = customer.area;
+                document.getElementById('customerPackage').value = customer.package;
+                document.getElementById('customerStatus').value = customer.status;
             }
             modal.style.display = 'block';
         }
-        
+
         function closeCustomerModal() {
             document.getElementById('customerModal').style.display = 'none';
         }
 
         function deleteCustomer(id) {
             if (currentRole !== USER_ROLES.ADMIN) {
-                alert('এই অ্যাকশনের জন্য আপনার পর্যাপ্ত অনুমতি নেই। শুধুমাত্র অ্যাডমিনই গ্রাহক ডিলিট করতে পারে।');
+                alert('এই অ্যাকশনের জন্য আপনার পর্যাপ্ত অনুমতি নেই।');
                 return;
             }
-            if (confirm('আপনি কি নিশ্চিত যে এই গ্রাহককে মুছে ফেলতে চান?')) {
+            if (confirm(`আপনি কি সত্যিই আইডি ${id} সহ এই গ্রাহককে ডিলিট করতে চান?`)) {
                 customers = customers.filter(c => c.id !== id);
+                // Also remove their transactions (optional, but good for demo/clean up)
+                transactions = transactions.filter(t => t.customerId !== id); 
                 saveAllData();
                 renderCustomerTable();
-                alert('গ্রাহক সফলভাবে মুছে ফেলা হয়েছে।');
+                updateDashboard();
+                alert(`গ্রাহক আইডি ${id} সফলভাবে ডিলিট হয়েছে।`);
             }
         }
-        
+
         function filterCustomers() {
-            const searchTerm = document.getElementById('customerSearch').value.toLowerCase();
-            const statusFilter = document.getElementById('customerFilterStatus').value;
+            const searchText = document.getElementById('customerSearch').value.toLowerCase();
+            const filterStatus = document.getElementById('customerFilterStatus').value;
 
-            const filtered = customers.filter(customer => {
-                const searchMatch = customer.name.toLowerCase().includes(searchTerm) || customer.phone.includes(searchTerm);
-                const statusMatch = statusFilter === '' || customer.status === statusFilter;
-                return searchMatch && statusMatch;
+            const filtered = customers.filter(c => {
+                const matchesSearch = c.name.toLowerCase().includes(searchText) || 
+                                      c.phone.toLowerCase().includes(searchText) ||
+                                      c.area.toLowerCase().includes(searchText);
+                
+                const matchesStatus = !filterStatus || c.status === filterStatus;
+                
+                return matchesSearch && matchesStatus;
             });
-
             renderCustomerTable(filtered);
         }
 
-        
-        // --- 7. Billing System Logic ---
+        // --- 7. Billing Logic ---
 
-        function filterBillingCustomers() {
-            const searchTerm = document.getElementById('billCustomerSearch').value.toLowerCase();
-            const select = document.getElementById('billCustomerId');
-            select.innerHTML = '<option value="">--- গ্রাহক নির্বাচন করুন ---</option>';
-            
-            const relevantCustomers = currentRole === USER_ROLES.ADMIN
-                ? customers
-                : customers.filter(c => c.collector === currentUsername);
-
-            relevantCustomers.filter(c => c.status === 'Active').forEach(c => {
-                const dueStatus = c.due ? ' (বকেয়া)' : '';
-                const optionText = `ID: ${c.id} | ${c.name} | ${c.area} | ${c.phone} ৳${c.package}${dueStatus}`;
-                const searchableString = `${c.id} ${c.name} ${c.area} ${c.phone} ${c.package}`.toLowerCase();
-
-                if (searchableString.includes(searchTerm)) {
-                     select.innerHTML += `<option 
-                                            value="${c.id}" 
-                                            data-package="${c.package}" 
-                                            data-due="${c.due}"
-                                            title="${optionText}">
-                                            ${optionText}
-                                        </option>`;
-                }
-            });
-
-            select.onchange = function() {
-                const selectedOption = select.options[select.selectedIndex];
-                const packageValue = selectedOption.getAttribute('data-package');
-                document.getElementById('billAmount').value = packageValue;
-            };
-            
-            if (select.options.length === 2 && searchTerm.length > 0) { 
-                select.selectedIndex = 1;
-                select.dispatchEvent(new Event('change'));
-            }
-        }
-
-
+        /**
+         * UPDATED: Sets the collector dropdown value and disables it for the 'collector' role.
+         */
         function populateCollectorDropdown() {
             const select = document.getElementById('collectorId');
-            select.innerHTML = '';
+            select.innerHTML = ''; // Clear previous options
             
-            if (currentRole === USER_ROLES.ADMIN) {
-                Object.keys(DEMO_USERS).forEach(userKey => {
-                    select.innerHTML += `<option value="${userKey}">${DEMO_USERS[userKey].name} (${userKey})</option>`;
-                });
+            const isAdmin = currentRole === USER_ROLES.ADMIN;
+            
+            // Collect all users who can collect (Admins and Collectors)
+            const collectors = Object.keys(DEMO_USERS)
+                .filter(key => DEMO_USERS[key].role === USER_ROLES.COLLECTOR || DEMO_USERS[key].role === USER_ROLES.ADMIN)
+                .map(key => ({
+                    username: key,
+                    name: DEMO_USERS[key].name,
+                    role: DEMO_USERS[key].role
+                }));
+            
+            collectors.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.username;
+                option.textContent = `${user.name} (${user.role === USER_ROLES.ADMIN ? 'অ্যাডমিন' : 'কালেক্টর'})`;
+                select.appendChild(option);
+            });
+
+            // LOGIC FOR ROLE-BASED DISABLING
+            if (!isAdmin) {
+                // If the user is a Collector, pre-select their name and disable the dropdown
+                select.value = currentUsername;
+                select.disabled = true; // Disable the option to change
+                select.title = "আপনার রোল কালেক্টর, তাই অন্য কালেক্টর নির্বাচন করতে পারবেন না।";
             } else {
-                select.innerHTML = `<option value="${currentUsername}">${DEMO_USERS[currentUsername].name} (${currentUsername})</option>`;
-                select.disabled = true;
+                // If the user is an Admin, they can select anyone
+                select.value = currentUsername; // Default to admin's name
+                select.disabled = false;
+                select.title = "";
             }
+        }
+        
+        function filterBillingCustomers(searchText = document.getElementById('billCustomerSearch').value) {
+            const searchInput = searchText.toLowerCase();
+            const select = document.getElementById('billCustomerId');
+            select.innerHTML = ''; // Clear previous options
+
+            const filteredCustomers = customers.filter(c => 
+                c.status === 'Active' && (
+                    c.name.toLowerCase().includes(searchInput) ||
+                    String(c.id).includes(searchInput) ||
+                    c.phone.toLowerCase().includes(searchInput) ||
+                    c.area.toLowerCase().includes(searchInput)
+                )
+            );
+
+            if (filteredCustomers.length === 0) {
+                select.innerHTML = '<option value="">কোনো গ্রাহক পাওয়া যায়নি</option>';
+                return;
+            }
+
+            filteredCustomers.forEach(c => {
+                const option = document.createElement('option');
+                option.value = c.id;
+                option.textContent = `${c.name} (ID: ${c.id}, এরিয়া: ${c.area}, প্যাকেজ: ৳${c.package}, বকেয়া: ${c.due ? 'হ্যাঁ' : 'না'})`;
+                select.appendChild(option);
+            });
         }
 
         document.getElementById('billCollectionForm').onsubmit = function(e) {
             e.preventDefault();
+
             const customerId = parseInt(document.getElementById('billCustomerId').value);
             const billAmount = parseInt(document.getElementById('billAmount').value);
-            const method = document.getElementById('paymentMethod').value;
-            const collector = document.getElementById('collectorId').value;
+            const paymentMethod = document.getElementById('paymentMethod').value;
+            
+            // IMPORTANT: Get the collectorId. If disabled, we still need the value.
+            const collectorSelect = document.getElementById('collectorId');
+            const collectorId = collectorSelect.value;
+            
+            const customerIndex = customers.findIndex(c => c.id === customerId);
 
-            if (!customerId) return alert('অনুগ্রহ করে গ্রাহক নির্বাচন করুন।');
-
-            const customer = customers.find(c => c.id === customerId);
-
-            if (customer) {
-                const transaction = {
-                    id: transactions.length + 1,
-                    customerId,
-                    customerName: customer.name,
-                    package: customer.package,
-                    amount: billAmount,
-                    method,
-                    collector,
-                    time: new Date().toLocaleString('bn-BD')
-                };
-
-                customer.due = false;
-                customer.collector = collector;
-                transactions.push(transaction);
-
-                saveAllData();
-
-                alert(`✅ বিল সফলভাবে আদায় হয়েছে! গ্রাহক: ${customer.name}, মোট: ৳${billAmount}।`);
-                
-                generateReceipt(customer, transaction);
-                
-                document.getElementById('billCollectionForm').reset();
-                filterBillingCustomers(''); 
-                document.getElementById('billCustomerSearch').value = ''; 
-            } else {
-                alert('গ্রাহককে খুঁজে পাওয়া যায়নি।');
-            }
-        };
-
-        function generateReceipt(customer, transaction) {
-            const receiptContent = `
-                <div class="receipt-body">
-                    <div class="receipt-header">
-                        <h2>বিল পরিশোধ রসিদ</h2>
-                        <p style="margin: 5px 0;">BROTHERS NETWORK</p>
-                    </div>
-
-                    <div class="receipt-details">
-                        <div><span>রসিদ নং:</span><strong>${transaction.id}</strong></div>
-                        <div><span>তারিখ:</span><strong>${new Date().toLocaleDateString('bn-BD')}</strong></div>
-                        <div><span>সময়:</span><strong>${new Date().toLocaleTimeString('bn-BD')}</strong></div>
-                    </div>
-                    
-                    <hr style="border-top: 1px dashed #ccc; margin: 15px 0;">
-
-                    <div class="receipt-details">
-                        <div style="font-size: 16px;"><strong>গ্রাহকের বিবরণ</strong></div>
-                        <div><span>গ্রাহক আইডি:</span><strong>${customer.id}</strong></div>
-                        <div><span>নাম:</span><strong>${customer.name}</strong></div>
-                        <div><span>ফোন:</span><strong>${customer.phone}</strong></div>
-                        <div><span>এরিয়া:</span><strong>${customer.area}</strong></div>
-                    </div>
-
-                    <hr style="border-top: 1px dashed #ccc; margin: 15px 0;">
-
-                    <div class="receipt-details">
-                        <div style="font-size: 16px;"><strong>লেনদেনের বিবরণ</strong></div>
-                        <div><span>মাসিক প্যাকেজ:</span><strong>৳ ${customer.package.toLocaleString('bn-BD')}</strong></div>
-                        <div><span>আদায়কৃত পরিমাণ:</span><strong>৳ ${transaction.amount.toLocaleString('bn-BD')}</strong></div>
-                        <div><span>পেমেন্ট পদ্ধতি:</span><strong>${transaction.method}</strong></div>
-                        <div><span>কালেক্টর:</span><strong>${DEMO_USERS[transaction.collector].name}</strong></div>
-                    </div>
-
-                    <div class="receipt-total">
-                        <div><span>মোট পরিশোধ:</span><strong>৳ ${transaction.amount.toLocaleString('bn-BD')}</strong></div>
-                    </div>
-
-                    <div class="receipt-footer">
-                        <p style="margin-top: 20px;">ধন্যবাদ! আপনার সেবা নিশ্চিত করা হলো।</p>
-                        <button onclick="window.print()" style="margin-top: 10px; padding: 8px 15px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">প্রিন্ট রসিদ</button>
-                    </div>
-                </div>
-            `;
-
-            const printWindow = window.open('', '_blank', 'width=500,height=650');
-            printWindow.document.write('<html><head><title>বিল রসিদ</title>');
-            printWindow.document.write('<style>@media print {.receipt-footer button { display: none; }} body { font-family: Arial, sans-serif; } .receipt-body { padding: 20px; max-width: 400px; margin: 0 auto; border: 1px solid #ccc; } .receipt-header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; } .receipt-details div { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px; } .receipt-details strong { font-weight: bold; } .receipt-total { border-top: 1px dashed #999; margin-top: 15px; padding-top: 10px; font-size: 16px; font-weight: bold; } .receipt-footer { text-align: center; margin-top: 30px; font-size: 12px; }</style>');
-            printWindow.document.write('</head><body>');
-            printWindow.document.write(receiptContent);
-            printWindow.document.write('</body></html>');
-            printWindow.document.close();
-        }
-        
-        // --- 8. Reports & Analytics Logic ---
-
-        function renderTransactionTable() {
-            const tableBody = document.getElementById('transactionTableBody');
-            tableBody.innerHTML = '';
-
-            const relevantTransactions = currentRole === USER_ROLES.ADMIN
-                ? transactions.slice().reverse()
-                : transactions.filter(t => t.collector === currentUsername).slice().reverse();
-
-            if (relevantTransactions.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">কোনো লেনদেন রেকর্ড নেই।</td></tr>';
+            if (customerIndex === -1) {
+                alert('অনুগ্রহ করে একজন বৈধ গ্রাহক নির্বাচন করুন।');
                 return;
             }
 
-            relevantTransactions.forEach(t => {
-                const row = tableBody.insertRow();
-                row.innerHTML = `
-                    <td>${t.time.split(',')[0]}</td>
-                    <td>${t.customerName} (ID: ${t.customerId})</td>
-                    <td>৳ ${t.package}</td>
-                    <td style="font-weight: bold; color: green;">৳ ${t.amount}</td>
-                    <td>${t.method}</td>
-                    <td>${DEMO_USERS[t.collector].name || t.collector}</td>
-                `;
-            });
-        }
-        
-        // --- 9. Collector Management Logic ---
+            const customer = customers[customerIndex];
+            const customerName = customer.name;
+            const customerPackage = customer.package;
 
-        function renderCollectorPerformance() {
-            const tableBody = document.querySelector('#collectorPerformanceTable tbody');
-            tableBody.innerHTML = '';
+            if (billAmount < 10) {
+                 alert('আদায়ের পরিমাণ অন্তত ১০ টাকা হতে হবে।');
+                return;
+            }
+
+            // 1. Record Transaction
+            const newTransaction = {
+                id: generateTransactionId(), // নতুন আইডি জেনারেটর ব্যবহার
+                customerId,
+                customerName,
+                package: customerPackage,
+                amount: billAmount,
+                method: paymentMethod,
+                collector: collectorId,
+                time: new Date().toISOString(), // Changed to ISOString for filterability
+            };
+            transactions.push(newTransaction);
             
-            const collectorData = {};
-            Object.keys(DEMO_USERS).forEach(userKey => {
-                if (DEMO_USERS[userKey].role === USER_ROLES.COLLECTOR || userKey === 'admin') {
-                     collectorData[userKey] = {
-                        name: DEMO_USERS[userKey].name,
-                        target: DEMO_USERS[userKey].target,
-                        collection: 0
-                     };
-                }
-            });
+            // 2. Update Customer Status (assuming a successful payment clears the due status)
+            if (customer.due) {
+                customers[customerIndex].due = false;
+            }
 
-            transactions.forEach(t => {
-                if (collectorData[t.collector]) {
-                    collectorData[t.collector].collection += t.amount;
-                }
-            });
+            // 3. Save Data and Refresh UI
+            saveAllData();
+            updateDashboard(); // Update collection stats
+            
+            document.getElementById('billCollectionForm').reset();
+            filterBillingCustomers(''); // Reset and reload dropdown
+            populateCollectorDropdown(); // Re-set the collector name after reset
+            
+            alert(`✅ বিল সফলভাবে পরিশোধ হয়েছে! গ্রাহক: ${customerName}, আদায়: ৳${billAmount}`);
 
-            for (const [userKey, data] of Object.entries(collectorData)) {
-                const progress = (data.collection / data.target) * 100;
-                const progressColor = progress >= 80 ? '#28a745' : progress >= 50 ? '#ffc107' : '#dc3545';
-                const row = tableBody.insertRow();
-                row.innerHTML = `
-                    <td>${data.name}</td>
-                    <td>${userKey}</td>
-                    <td>৳ ${data.collection.toLocaleString('bn-BD')}</td>
-                    <td>
-                        <div class="progress-bar-container" style="width: 150px; display: inline-block;">
-                            <div class="progress-bar" style="width: ${Math.min(100, progress)}%; background: ${progressColor};"></div>
+            // 4. Call Print Function for the newly created transaction
+            printInvoice(newTransaction.id);
+        };
+        
+        // --- নতুন ইনভয়েস/রিসিপ্ট প্রিন্ট ফাংশন ---
+        function printInvoice(transactionId) {
+            const transaction = transactions.find(t => t.id === transactionId);
+
+            if (!transaction) {
+                alert('লেনদেন খুঁজে পাওয়া যায়নি!');
+                return;
+            }
+
+            const customer = customers.find(c => c.id === transaction.customerId);
+            const customerName = transaction.customerName; 
+            const customerId = transaction.customerId;
+            const collectorName = DEMO_USERS[transaction.collector] ? DEMO_USERS[transaction.collector].name : 'N/A';
+            const customerArea = customer ? customer.area : 'N/A';
+            
+            // বাংলা তারিখ ও সময় ফরম্যাট
+            const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
+            const transactionDate = new Date(transaction.time).toLocaleDateString('bn-BD', options);
+            
+            const printContent = `
+                <!DOCTYPE html>
+                <html lang="bn">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>রিসিপ্ট #${transaction.id}</title>
+                    <style>
+                        body { font-family: 'Arial', sans-serif; font-size: 12px; margin: 0; padding: 0; color: #000; }
+                        .receipt-container { 
+                            max-width: 80mm; 
+                            margin: 10px auto; 
+                            border: 1px solid #000; 
+                            padding: 10px; 
+                        }
+                        .header { text-align: center; margin-bottom: 10px; }
+                        .header h4 { margin: 0; font-size: 1.1em; }
+                        .header p { margin: 2px 0; font-size: 0.8em; }
+                        
+                        .details table { width: 100%; margin-bottom: 10px; border-collapse: collapse; }
+                        .details td { padding: 3px 0; border: none; }
+                        .details strong { font-weight: bold; }
+
+                        .items table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+                        .items th, .items td { border-bottom: 1px dashed #999; padding: 5px 0; text-align: left; }
+                        .items th { text-align: center; font-weight: bold; background-color: #eee; }
+                        .text-right { text-align: right !important; }
+                        
+                        .total-row td { 
+                            font-weight: bold; 
+                            font-size: 1.1em; 
+                            border-top: 2px solid #000 !important; 
+                        }
+                        .footer { margin-top: 15px; font-size: 0.9em; text-align: center; }
+                        .footer p { margin: 5px 0; }
+                        
+                        @media print {
+                            body { font-size: 11px; }
+                            .receipt-container { border: none; padding: 0; margin: 0; }
+                            .bill-print-button { display: none; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="receipt-container">
+                        <div class="header">
+                            <h4>বিল পেমেন্ট রিসিপ্ট</h4>
+                            <p>আপনার প্রতিষ্ঠানের নাম</p>
+                            <p>যোগাযোগ: ০০০০০০০০০০ | এরিয়া: ${customerArea}</p>
+                            <hr style="border: 1px dashed #000; margin: 5px 0;">
                         </div>
-                        ${Math.min(100, progress).toFixed(1)}%
-                    </td>
-                `;
+                        
+                        <div class="details">
+                            <table>
+                                <tr>
+                                    <td><strong>রিসিপ্ট নং:</strong> ${transaction.id}</td>
+                                    <td class="text-right"><strong>তারিখ:</strong> ${transactionDate}</td>
+                                </tr>
+                                <tr>
+                                    <td colspan="2"><strong>গ্রাহক:</strong> ${customerName} (ID: ${customerId})</td>
+                                </tr>
+                                <tr>
+                                    <td colspan="2"><strong>কালেক্টর:</strong> ${collectorName}</td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <div class="items">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50%;">বিবরণ</th>
+                                        <th style="width: 25%;" class="text-right">প্যাকেজ (৳)</th>
+                                        <th style="width: 25%;" class="text-right">আদায় (৳)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>মাসিক পরিষেবা বিল</td>
+                                        <td class="text-right">${transaction.package.toLocaleString('bn-BD')}</td>
+                                        <td class="text-right">${transaction.amount.toLocaleString('bn-BD')}</td>
+                                    </tr>
+                                </tbody>
+                                <tfoot>
+                                    <tr class="total-row">
+                                        <td colspan="2" class="text-right" style="border-bottom: 1px solid #000;">মোট আদায়:</td>
+                                        <td class="text-right" style="border-bottom: 1px solid #000;">৳ ${transaction.amount.toLocaleString('bn-BD')}</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                        
+                        <div class="footer">
+                            <p>পেমেন্ট মেথড: <strong>${transaction.method}</strong></p>
+                            <p>ধন্যবাদ, আবার আসবেন।</p>
+                        </div>
+                        
+                        <div class="bill-print-button" style="text-align: center; margin-top: 15px;">
+                            <button onclick="window.print()" style="padding: 5px 10px; background-color: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">প্রিন্ট করুন</button>
+                            <button onclick="window.close()" style="padding: 5px 10px; background-color: #6c757d; color: white; border: none; border-radius: 3px; cursor: pointer; margin-left: 10px;">বন্ধ করুন</button>
+                        </div>
+                    </div>
+
+                </body>
+                </html>
+            `;
+
+            const printWindow = window.open('', '_blank', 'width=400,height=600');
+            if (printWindow) {
+                printWindow.document.write(printContent);
+                printWindow.document.close();
+                // window.print() will be called manually by user from the new window, or you can uncomment below line to auto-call:
+                // printWindow.print();
+            } else {
+                alert('প্রিন্ট উইন্ডো খোলা সম্ভব হয়নি। অনুগ্রহ করে আপনার ব্রাউজারের পপ-আপ ব্লকার চেক করুন।');
             }
         }
-        
-        // --- 10. System Automation & Export (Includes JSON/CSV & Manual Backup) ---
-        
+        // --- ইনভয়েস/রিসিপ্ট প্রিন্ট ফাংশন শেষ ---
+
+        // --- 8. System and Collector Management Logic ---
+
         function autoGenerateBill() {
              if (currentRole !== USER_ROLES.ADMIN) {
                 alert('এই অ্যাকশনের জন্য আপনার পর্যাপ্ত অনুমতি নেই।');
                 return;
             }
-             if (confirm('আপনি কি নিশ্চিত যে সকল সক্রিয় গ্রাহকের জন্য মাসিক বিল জেনারেট করতে চান? (এটি বকেয়া স্ট্যাটাস True করবে)')) {
-                let generatedCount = 0;
-                customers.forEach(c => {
+            if (confirm('আপনি কি সকল সক্রিয় গ্রাহকের জন্য মাসিক বিল তৈরি করতে চান এবং বকেয়া স্ট্যাটাস সেট করতে চান?')) {
+                let dueCount = 0;
+                customers = customers.map(c => {
                     if (c.status === 'Active') {
                         c.due = true;
-                        generatedCount++;
+                        dueCount++;
                     }
+                    return c;
                 });
-                saveAllData(); // Save data after bulk update
-                alert(`${generatedCount} জন সক্রিয় গ্রাহকের জন্য সফলভাবে বিল জেনারেট হয়েছে।`);
-                if (document.getElementById('dashboard').classList.contains('active-view')) updateDashboard();
-                if (document.getElementById('customers').classList.contains('active-view')) renderCustomerTable();
+                saveAllData();
+                updateDashboard();
+                alert(`✅ ${dueCount} জন সক্রিয় গ্রাহকের জন্য বিল তৈরি হয়েছে। তাদের বকেয়া স্ট্যাটাস সেট করা হয়েছে।`);
             }
         }
 
-        function exportData(type) {
-            if (currentRole !== USER_ROLES.ADMIN) {
-                alert('এই অ্যাকশনের জন্য আপনার পর্যাপ্ত অনুমতি নেই।');
+        function getLeastBusyCollector() {
+            const collectorLoads = {};
+            const collectors = Object.keys(DEMO_USERS).filter(u => DEMO_USERS[u].role === USER_ROLES.COLLECTOR || u === USER_ROLES.ADMIN);
+            
+            collectors.forEach(username => {
+                collectorLoads[username] = customers.filter(c => c.collector === username).length;
+            });
+
+            if (collectors.length === 0) return 'admin'; // Default fallback
+
+            let leastBusy = collectors[0];
+            let minLoad = collectorLoads[leastBusy];
+
+            for (const username in collectorLoads) {
+                if (collectorLoads[username] < minLoad) {
+                    minLoad = collectorLoads[username];
+                    leastBusy = username;
+                }
+            }
+            return leastBusy;
+        }
+
+        function renderCollectorPerformance() {
+            const tableBody = document.querySelector('#collectorPerformanceTable tbody');
+            tableBody.innerHTML = '';
+            
+            const users = Object.keys(DEMO_USERS);
+            
+            users.forEach(username => {
+                const user = DEMO_USERS[username];
+                
+                // Calculate total collection by this user
+                const totalCollection = transactions
+                    .filter(t => t.collector === username)
+                    .reduce((sum, t) => sum + t.amount, 0);
+                    
+                const target = user.target || 1; // Avoid division by zero
+                const progressPercentage = ((totalCollection / target) * 100).toFixed(1);
+                
+                const row = tableBody.insertRow();
+                row.innerHTML = `
+                    <td>${user.name} (${user.role === USER_ROLES.ADMIN ? 'Admin' : 'Collector'})</td>
+                    <td>${username}</td>
+                    <td>৳ ${totalCollection.toLocaleString('bn-BD')}</td>
+                    <td style="color: ${progressPercentage < 100 ? '#ffc107' : '#28a745'}; font-weight: bold;">${progressPercentage}%</td>
+                `;
+            });
+        }
+        
+        // --- 9. Transaction Report Logic (New/Modified) ---
+
+        function renderTransactionTable(dataToRender = transactions) {
+            const tableBody = document.getElementById('transactionTableBody');
+            tableBody.innerHTML = '';
+
+            // Sort by date descending (latest first)
+            const sortedTransactions = [...dataToRender].sort((a, b) => new Date(b.time) - new Date(a.time));
+
+            if (sortedTransactions.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">কোনো লেনদেন রেকর্ড নেই।</td></tr>';
                 return;
             }
-            if (type === 'json') {
-                // Collect all current data into a single object for manual JSON backup
-                const data = { 
-                    customers, 
-                    transactions, 
-                    users: DEMO_USERS, 
-                    areas: DEMO_AREAS, 
-                    manualBackupTime: new Date().toISOString() 
-                };
-                const dataStr = JSON.stringify(data, null, 2);
-                downloadFile(dataStr, `billing_backup_MANUAL_${Date.now()}.json`, 'application/json');
-                alert('সম্পূর্ণ ডেটা ব্যাকআপ (JSON) সফল। ফাইল ডাউনলোড হয়েছে।');
-            } else if (type === 'csv') {
-                const headers = ['ID', 'Name', 'Phone', 'Area', 'Package', 'Status', 'Due', 'Collector'];
-                const csvRows = customers.map(c => [
-                    c.id, c.name, c.phone, c.area, c.package, c.status, c.due ? 'Yes' : 'No', c.collector
-                ].map(item => `"${item}"`).join(','));
-                const csvData = [headers.join(','), ...csvRows].join('\n');
-                downloadFile(csvData, 'customers_data.csv', 'text/csv');
-                alert('গ্রাহক ডেটা CSV এক্সপোর্ট সফল।');
-            }
+
+            sortedTransactions.forEach(t => {
+                // Convert ISO date to locale string for display
+                const displayTime = new Date(t.time).toLocaleString('bn-BD'); 
+                
+                const row = tableBody.insertRow();
+                row.innerHTML = `
+                    <td>${displayTime}</td>
+                    <td>${t.customerName}</td>
+                    <td>৳ ${t.package}</td>
+                    <td>৳ ${t.amount}</td>
+                    <td>${t.method}</td>
+                    <td>${DEMO_USERS[t.collector] ? DEMO_USERS[t.collector].name : 'N/A'}</td>
+                    <td>
+                        <button class="btn-action btn-sm" onclick="printInvoice(${t.id})" style="padding: 5px 8px;"><i class="fas fa-print"></i></button>
+                    </td>
+                `;
+            });
         }
 
-        function downloadFile(data, filename, mimeType) {
-            const blob = new Blob([data], { type: mimeType });
+        function filterTransactionsByDate() {
+            const startDateInput = document.getElementById('startDate').value;
+            const endDateInput = document.getElementById('endDate').value;
+
+            if (!startDateInput || !endDateInput) {
+                alert('অনুগ্রহ করে শুরু এবং শেষের তারিখ উভয়ই নির্বাচন করুন।');
+                return;
+            }
+
+            // Start time at the beginning of the selected start day
+            const startTime = new Date(startDateInput);
+            startTime.setHours(0, 0, 0, 0);
+
+            // End time at the end of the selected end day (23:59:59.999)
+            const endTime = new Date(endDateInput);
+            endTime.setHours(23, 59, 59, 999);
+            
+            if (startTime.getTime() > endTime.getTime()) {
+                 alert('শুরুর তারিখ শেষের তারিখের পরে হতে পারে না।');
+                return;
+            }
+
+            const filteredData = transactions.filter(t => {
+                const transactionTime = new Date(t.time).getTime();
+                return transactionTime >= startTime.getTime() && transactionTime <= endTime.getTime();
+            });
+
+            renderTransactionTable(filteredData);
+            alert(`${filteredData.length} টি লেনদেন পাওয়া গেছে।`);
+        }
+
+        function exportTransactionToCSV() {
+            // Get the current filter dates to ensure the exported data matches the view
+            const startDateInput = document.getElementById('startDate').value;
+            const endDateInput = document.getElementById('endDate').value;
+            
+            let dataToExport = transactions;
+
+            if (startDateInput && endDateInput) {
+                 const startTime = new Date(startDateInput);
+                 startTime.setHours(0, 0, 0, 0);
+                 const endTime = new Date(endDateInput);
+                 endTime.setHours(23, 59, 59, 999);
+                
+                dataToExport = transactions.filter(t => {
+                    const transactionTime = new Date(t.time).getTime();
+                    return transactionTime >= startTime.getTime() && transactionTime <= endTime.getTime();
+                });
+            }
+
+            if (dataToExport.length === 0) {
+                alert('এক্সপোর্ট করার জন্য কোনো ডেটা নেই।');
+                return;
+            }
+            
+            // Sort data before export
+            const sortedData = [...dataToExport].sort((a, b) => new Date(b.time) - new Date(a.time));
+
+            // Define CSV headers (in Bengali matching the table) and prepare data
+            const headers = ["তারিখ", "গ্রাহক নাম", "প্যাকেজ (৳)", "আদায় (৳)", "পদ্ধতি", "কালেক্টর"];
+            
+            const csvData = sortedData.map(t => [
+                `"${new Date(t.time).toLocaleString('bn-BD')}"`, // Formatted date
+                `"${t.customerName}"`,
+                t.package,
+                t.amount,
+                `"${t.method}"`,
+                `"${DEMO_USERS[t.collector] ? DEMO_USERS[t.collector].name : 'N/A'}"`
+            ]);
+
+            // Format the CSV content
+            let csvContent = headers.join(",") + "\n";
+            csvData.forEach(row => {
+                csvContent += row.join(",") + "\n";
+            });
+
+            // Create a Blob with UTF-8 BOM (\ufeff) for proper Bengali character support
+            const blob = new Blob(["\ufeff", csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            
+            const exportFileName = startDateInput && endDateInput 
+                                 ? `bill_history_${startDateInput}_to_${endDateInput}.csv`
+                                 : `bill_history_full_${new Date().toLocaleDateString('en-CA')}.csv`;
+                                 
+            link.setAttribute('download', exportFileName);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            alert(`মোট ${dataToExport.length} টি লেনদেন CSV তে এক্সপোর্ট করা হয়েছে।`);
+        }
+
+        // --- 10. Area Management Logic ---
+
+        function populateAreaManagement() {
+            const select = document.getElementById('existingAreaSelect');
+            select.innerHTML = '';
+            DEMO_AREAS.forEach(area => {
+                const option = document.createElement('option');
+                option.value = area;
+                option.textContent = area;
+                select.appendChild(option);
+            });
+            // Automatically select and load the first area if available
+            if (DEMO_AREAS.length > 0) {
+                 loadAreaForEdit(DEMO_AREAS[0]);
+            } else {
+                document.getElementById('updatedAreaName').value = '';
+            }
+        }
+        
+        function loadAreaForEdit(areaName) {
+            document.getElementById('updatedAreaName').value = areaName;
+        }
+
+        document.getElementById('addAreaForm').onsubmit = function(e) {
+            e.preventDefault();
+            const newAreaName = document.getElementById('newAreaName').value.trim();
+            if (newAreaName && !DEMO_AREAS.includes(newAreaName)) {
+                DEMO_AREAS.push(newAreaName);
+                saveAllData();
+                alert(`এরিয়া "${newAreaName}" যোগ করা হয়েছে।`);
+                this.reset();
+                populateAreaManagement();
+            } else {
+                alert('এরিয়া নাম বৈধ নয় বা ইতিমধ্যেই বিদ্যমান।');
+            }
+        };
+
+        document.getElementById('editAreaForm').onsubmit = function(e) {
+            e.preventDefault();
+            const oldAreaName = document.getElementById('existingAreaSelect').value;
+            const updatedAreaName = document.getElementById('updatedAreaName').value.trim();
+
+            if (!oldAreaName || !updatedAreaName || oldAreaName === updatedAreaName) {
+                alert('একটি এরিয়া নির্বাচন করুন এবং একটি নতুন নাম দিন।');
+                return;
+            }
+
+            const index = DEMO_AREAS.indexOf(oldAreaName);
+            if (index !== -1) {
+                // Update area name in the list
+                DEMO_AREAS[index] = updatedAreaName;
+                
+                // Update area name in all customers
+                customers = customers.map(c => {
+                    if (c.area === oldAreaName) {
+                        c.area = updatedAreaName;
+                    }
+                    return c;
+                });
+                
+                saveAllData();
+                alert(`এরিয়া "${oldAreaName}" পরিবর্তন করে "${updatedAreaName}" করা হয়েছে।`);
+                populateAreaManagement();
+            }
+        };
+
+        function deleteArea() {
+            const areaToDelete = document.getElementById('existingAreaSelect').value;
+
+            if (!areaToDelete || areaToDelete === 'Unassigned') {
+                 alert('ডিলিট করার জন্য একটি বৈধ এরিয়া নির্বাচন করুন।');
+                 return;
+            }
+
+            if (confirm(`আপনি কি সত্যিই "${areaToDelete}" এরিয়াটি ডিলিট করতে চান? এই এরিয়ার গ্রাহকরা "Unassigned" হবে।`)) {
+                // Remove from area list
+                DEMO_AREAS = DEMO_AREAS.filter(area => area !== areaToDelete);
+                
+                // Update customers
+                customers = customers.map(c => {
+                    if (c.area === areaToDelete) {
+                        c.area = 'Unassigned';
+                    }
+                    return c;
+                });
+                
+                saveAllData();
+                alert(`এরিয়া "${areaToDelete}" সফলভাবে ডিলিট করা হয়েছে।`);
+                populateAreaManagement();
+                renderCustomerTable();
+            }
         }
 
         // --- 11. User Management Logic ---
 
         function populateUserEditDropdown() {
-            const selectEdit = document.getElementById('editUsername');
-            const selectRole = document.getElementById('editUserRole');
-            selectEdit.innerHTML = '<option value="">--- ইউজার নির্বাচন করুন ---</option>';
-            selectRole.innerHTML = `<option value="collector">কালেক্টর</option><option value="admin">অ্যাডমিন</option>`;
+            const select = document.getElementById('editUsername');
+            select.innerHTML = '';
             
-            Object.keys(DEMO_USERS).forEach(userKey => {
-                selectEdit.innerHTML += `<option value="${userKey}">${DEMO_USERS[userKey].name} (${userKey})</option>`;
+            const users = Object.keys(DEMO_USERS);
+            users.forEach(username => {
+                const option = document.createElement('option');
+                option.value = username;
+                option.textContent = `${DEMO_USERS[username].name} (${DEMO_USERS[username].role})`;
+                select.appendChild(option);
             });
-
-            loadUserForEdit('admin');
+            // Load the first user for editing by default
+            if (users.length > 0) {
+                loadUserForEdit(users[0]);
+            }
         }
 
         function loadUserForEdit(username) {
             const user = DEMO_USERS[username];
-            if (user) {
-                document.getElementById('editUserName').value = user.name;
-                document.getElementById('editUserRole').value = user.role;
-                document.getElementById('editUserTarget').value = user.target;
-                document.getElementById('editPassword').value = '';
-            } else {
-                document.getElementById('editUserName').value = '';
-                document.getElementById('editUserTarget').value = '';
-            }
+            if (!user) return;
+            
+            document.getElementById('editUserName').value = user.name;
+            document.getElementById('editUserTarget').value = user.target;
+            
+            const roleSelect = document.getElementById('editUserRole');
+            roleSelect.innerHTML = `<option value="${user.role}">${user.role === USER_ROLES.ADMIN ? 'অ্যাডমিন' : 'কালেক্টর'}</option>`;
+            
+            // Prevent admin from editing their own role, or removing the last admin
+            roleSelect.disabled = username === 'admin'; 
         }
 
         document.getElementById('addUserForm').onsubmit = function(e) {
             e.preventDefault();
             const username = document.getElementById('newUsername').value.trim();
             const password = document.getElementById('newPassword').value;
-            const name = document.getElementById('newUserName').value;
+            const name = document.getElementById('newUserName').value.trim();
             const role = document.getElementById('newUserRole').value;
             const target = parseInt(document.getElementById('newUserTarget').value);
 
             if (DEMO_USERS[username]) {
-                alert('❌ এই ইউজারনেমটি ইতিমধ্যে বিদ্যমান।');
+                alert('এই ইউজারনেমটি ইতিমধ্যেই বিদ্যমান।');
                 return;
             }
 
             DEMO_USERS[username] = { password, role, name, target };
             saveAllData();
-            alert(`✅ নতুন ইউজার "${name}" (${username}) সফলভাবে যোগ হয়েছে।`);
-            document.getElementById('addUserForm').reset();
+            alert(`ইউজার "${username}" যোগ করা হয়েছে।`);
+            this.reset();
             populateUserEditDropdown();
         };
 
         document.getElementById('editUserForm').onsubmit = function(e) {
             e.preventDefault();
-            const username = document.getElementById('editUsername').value.trim();
+            const username = document.getElementById('editUsername').value;
             const newPassword = document.getElementById('editPassword').value;
-            const name = document.getElementById('editUserName').value;
+            const name = document.getElementById('editUserName').value.trim();
             const target = parseInt(document.getElementById('editUserTarget').value);
 
-            if (!DEMO_USERS[username]) {
-                alert('❌ ইউজার পাওয়া যায়নি।');
-                return;
-            }
-            
+            if (!DEMO_USERS[username]) return;
+
+            // Update details
             DEMO_USERS[username].name = name;
             DEMO_USERS[username].target = target;
             if (newPassword) {
@@ -1200,269 +1512,216 @@
             }
 
             saveAllData();
-            alert(`✅ ইউজার "${name}" (${username}) এর তথ্য সফলভাবে আপডেট হয়েছে।`);
-            applyRolePermissions(); 
+            alert(`ইউজার "${username}" আপডেট করা হয়েছে।`);
+            // The function must be called again to update the dropdown option text
+            populateUserEditDropdown(); 
         };
 
-        // --- 12. Area Management Functions ---
-
-        function populateAreaManagement() {
-            const select = document.getElementById('existingAreaSelect');
-            select.innerHTML = '<option value="">--- এরিয়া নির্বাচন করুন ---</option>';
-            DEMO_AREAS.forEach(area => {
-                select.innerHTML += `<option value="${area}">${area}</option>`;
-            });
-            document.getElementById('updatedAreaName').value = '';
-        }
-
-        document.getElementById('addAreaForm').onsubmit = function(e) {
-            e.preventDefault();
-            const newArea = document.getElementById('newAreaName').value.trim();
-            if (newArea && !DEMO_AREAS.includes(newArea)) {
-                DEMO_AREAS.push(newArea);
-                saveAllData();
-                alert(`✅ এরিয়া "${newArea}" সফলভাবে যোগ হয়েছে।`);
-                document.getElementById('addAreaForm').reset();
-                populateAreaManagement();
-                populateAreaDropdown();
-            } else {
-                alert('❌ এরিয়া নামটি হয় ফাঁকা অথবা ইতিমধ্যে বিদ্যমান।');
-            }
-        };
-
-        function loadAreaForEdit(oldArea) {
-            document.getElementById('updatedAreaName').value = oldArea;
-        }
-
-        document.getElementById('editAreaForm').onsubmit = function(e) {
-            e.preventDefault();
-            const oldArea = document.getElementById('existingAreaSelect').value;
-            const newArea = document.getElementById('updatedAreaName').value.trim();
-
-            if (!oldArea || !newArea) {
-                alert('❌ এরিয়া নির্বাচন করুন এবং একটি নতুন নাম দিন।');
+        function deleteUser() {
+            const username = document.getElementById('editUsername').value;
+            
+            if (username === 'admin') {
+                alert('সুপার অ্যাডমিন ইউজার ডিলিট করা যাবে না।');
                 return;
             }
-            if (oldArea === newArea) {
-                alert('ℹ️ এরিয়া নামটি পরিবর্তন করা হয়নি।');
-                return;
-            }
-            if (DEMO_AREAS.includes(newArea)) {
-                 alert('❌ নতুন এরিয়া নামটি ইতিমধ্যে বিদ্যমান।');
-                return;
-            }
-
-            const index = DEMO_AREAS.indexOf(oldArea);
-            if (index !== -1) {
-                DEMO_AREAS[index] = newArea;
-                
-                customers.forEach(c => {
-                    if (c.area === oldArea) {
-                        c.area = newArea;
+            
+            if (confirm(`আপনি কি সত্যিই ইউজার "${username}" ডিলিট করতে চান?`)) {
+                // Reassign customers to the primary admin
+                customers = customers.map(c => {
+                    if (c.collector === username) {
+                        c.collector = 'admin'; 
                     }
+                    return c;
                 });
+
+                // Remove user and their transactions
+                delete DEMO_USERS[username];
+                transactions = transactions.filter(t => t.collector !== username);
+
                 saveAllData();
-
-                alert(`✅ এরিয়া "${oldArea}" থেকে "${newArea}" এ সফলভাবে পরিবর্তিত হয়েছে।`);
-                populateAreaManagement();
-                renderCustomerTable();
-                populateAreaDropdown();
-            }
-        };
-        
-        function deleteArea() {
-            const areaToDelete = document.getElementById('existingAreaSelect').value;
-            if (!areaToDelete) {
-                alert('❌ অনুগ্রহ করে একটি এরিয়া নির্বাচন করুন।');
-                return;
-            }
-
-            if (confirm(`আপনি কি নিশ্চিত যে এরিয়া "${areaToDelete}" ডিলিট করতে চান? এই এরিয়ার ${customers.filter(c => c.area === areaToDelete).length} জন গ্রাহকের এরিয়া শূন্য হয়ে যাবে।`)) {
-                DEMO_AREAS = DEMO_AREAS.filter(area => area !== areaToDelete);
-
-                customers.forEach(c => {
-                    if (c.area === areaToDelete) {
-                        c.area = 'Unassigned';
-                    }
-                });
-                saveAllData();
-
-                alert(`✅ এরিয়া "${areaToDelete}" সফলভাবে ডিলিট হয়েছে।`);
-                populateAreaManagement();
-                renderCustomerTable();
-                populateAreaDropdown();
+                alert(`ইউজার "${username}" সফলভাবে ডিলিট হয়েছে। গ্রাহকদের অ্যাডমিনের কাছে পুনরায় বরাদ্দ করা হয়েছে।`);
+                document.getElementById('editUserForm').reset();
+                populateUserEditDropdown();
             }
         }
-        
-        // --- 13. Bulk Due Print & Customization Functions ---
 
+        // --- 12. Bulk Print & Misc. Logic ---
+        
         function openBulkDuePrintModal() {
-            if (currentRole !== USER_ROLES.ADMIN) {
-                alert('এই অ্যাকশনের জন্য আপনার পর্যাপ্ত অনুমতি নেই।');
-                return;
-            }
-
-            const dueCustomers = customers.filter(c => c.due && c.status === 'Active');
+            const modal = document.getElementById('bulkPrintModal');
             const tableBody = document.querySelector('#dueCustomersTable tbody');
             tableBody.innerHTML = '';
-            document.getElementById('defaultAmountInput').value = '';
+            
+            const dueCustomers = customers.filter(c => c.due && c.status === 'Active');
 
             if (dueCustomers.length === 0) {
-                alert('বর্তমানে কোনো বকেয়া গ্রাহক নেই।');
+                alert('এই মুহূর্তে কোনো বকেয়া গ্রাহক নেই।');
                 return;
             }
-
-            dueCustomers.forEach(customer => {
+            
+            dueCustomers.forEach(c => {
                 const row = tableBody.insertRow();
-                row.setAttribute('data-customer-id', customer.id);
-                
-                const defaultAmount = customer.package;
-
+                // Set default amount to package price
                 row.innerHTML = `
-                    <td>${customer.id}</td>
-                    <td>${customer.name}</td>
-                    <td>${customer.area}</td>
-                    <td>৳ ${customer.package}</td>
+                    <td>${c.id}</td>
+                    <td>${c.name}</td>
+                    <td>${c.area}</td>
+                    <td>৳ ${c.package}</td>
                     <td>
-                        <input type="number" 
-                            class="print-amount-input"
-                            data-id="${customer.id}"
-                            value="${defaultAmount}"
-                            min="1"
-                            style="padding: 8px; width: 100%; border: 1px solid #ced4da; border-radius: 4px;"
-                        >
+                        <input type="number" data-customer-id="${c.id}" value="${c.package}" min="10" style="width: 100%; padding: 5px;" class="due-amount-input">
                     </td>
                 `;
             });
-
-            document.getElementById('bulkPrintModal').style.display = 'block';
+            modal.style.display = 'block';
         }
 
         function closeBulkPrintModal() {
             document.getElementById('bulkPrintModal').style.display = 'none';
         }
-
+        
         function applyDefaultAmount() {
             const defaultAmount = parseInt(document.getElementById('defaultAmountInput').value);
-            if (isNaN(defaultAmount) || defaultAmount <= 0) {
-                alert('দয়া করে একটি বৈধ পরিমাণ দিন।');
+            if (isNaN(defaultAmount) || defaultAmount < 10) {
+                alert('অনুগ্রহ করে একটি বৈধ ডিফল্ট বিল পরিমাণ সেট করুন (কমপক্ষে ১০ টাকা)।');
                 return;
             }
-
-            document.querySelectorAll('.print-amount-input').forEach(input => {
+            
+            const inputs = document.querySelectorAll('.due-amount-input');
+            inputs.forEach(input => {
                 input.value = defaultAmount;
             });
+            alert(`সকল আদায়ের পরিমাণ ৳${defaultAmount} সেট করা হয়েছে।`);
         }
 
         function generateBulkPrint() {
-            const amountInputs = document.querySelectorAll('.print-amount-input');
+            const inputs = document.querySelectorAll('.due-amount-input');
+            const printData = [];
             
-            let printData = [];
-            amountInputs.forEach(input => {
-                const customerId = parseInt(input.getAttribute('data-id'));
+            inputs.forEach(input => {
+                const customerId = parseInt(input.getAttribute('data-customer-id'));
                 const amount = parseInt(input.value);
                 const customer = customers.find(c => c.id === customerId);
 
-                if (customer && amount > 0) {
+                if (customer && amount >= 10) {
                     printData.push({
                         id: customer.id,
                         name: customer.name,
                         area: customer.area,
                         package: customer.package,
-                        dueAmount: amount
+                        amountDue: amount,
+                        phone: customer.phone
                     });
                 }
             });
-
+            
             if (printData.length === 0) {
-                alert('প্রিন্টের জন্য কোনো বৈধ ডেটা পাওয়া যায়নি।');
+                alert('প্রিন্টের জন্য কোনো বৈধ ডেটা নেই।');
                 return;
             }
 
+            // --- Print Logic Simulation ---
             let printContent = `
                 <html>
                 <head>
                     <title>বাল্ক বকেয়া বিল প্রিন্ট</title>
                     <style>
-                        body { font-family: 'Arial', sans-serif; font-size: 12px; margin: 0; padding: 0;}
-                        .bill-page { 
-                            width: 210mm; 
-                            min-height: 297mm; 
-                            padding: 10mm; 
-                            margin: 0 auto; 
-                            box-sizing: border-box; 
-                            page-break-after: always;
-                            page-break-inside: avoid;
-                        }
-                        .bill-container { 
-                            border: 1px solid #000; 
-                            padding: 10px; 
-                            margin-bottom: 5mm; 
-                            width: 90mm;
-                            float: left; 
-                            box-sizing: border-box;
-                            height: 120mm;
-                            margin-right: 5mm;
-                            overflow: hidden; 
-                        }
-                        .header { text-align: center; margin-bottom: 10px; border-bottom: 1px dashed #999; padding-bottom: 5px; }
-                        .details div { display: flex; justify-content: space-between; margin-bottom: 3px; }
-                        .total { border-top: 1px dashed #999; margin-top: 10px; padding-top: 5px; font-weight: bold; font-size: 14px; }
+                        body { font-family: 'Arial', sans-serif; margin: 0; padding: 10px; }
+                        .bill-slip { border: 2px dashed #000; padding: 15px; margin-bottom: 20px; page-break-after: always; width: 300px; float: left; margin-right: 20px;}
+                        .bill-slip h4 { margin: 5px 0; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+                        .bill-slip p { margin: 2px 0; font-size: 0.9em; }
                         @media print {
-                            body { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; }
-                            .bill-page { margin: 0; padding: 0; }
-                            .bill-container { margin-right: 2mm; margin-bottom: 2mm; width: 95mm; height: 135mm;}
+                            .bill-slip { border: 1px solid #000; page-break-inside: avoid; margin-right: 0; }
+                            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                         }
                     </style>
                 </head>
                 <body>
-                <div class="bill-page">
             `;
-
             
-            printData.forEach((bill, index) => {
-                // For every 4 bills, start a new page
-                if (index > 0 && index % 4 === 0) {
-                    printContent += `</div><div class="bill-page">`;
-                }
-                
+            printData.forEach(item => {
                 printContent += `
-                    <div class="bill-container">
-                        <div class="header">
-                            <strong>BROTHERS NETWORK (মাসিক বিল)</strong>
-                            <p style="font-size: 10px;">তারিখ: ${new Date().toLocaleDateString('bn-BD')}</p>
-                        </div>
-
-                        <div class="details">
-                            <div><span>গ্রাহক ID:</span><strong>${bill.id}</strong></div>
-                            <div><span>নাম:</span><strong>${bill.name}</strong></div>
-                            <div><span>এরিয়া:</span><strong>${bill.area}</strong></div>
-                            <div><span>প্যাকেজ:</span><strong>৳ ${bill.package.toLocaleString('bn-BD')}</strong></div>
-                            <div><span>বিল মাস:</span><strong>${new Date().toLocaleString('bn-BD', { month: 'long', year: 'numeric' })}</strong></div>
-                        </div>
-
-                        <div class="total">
-                            <div><span>মোট বকেয়া আদায়যোগ্য:</span><strong style="color: #dc3545;">৳ ${bill.dueAmount.toLocaleString('bn-BD')}</strong></div>
-                        </div>
-                        
-                        <div style="margin-top: 15px; font-size: 10px; border-top: 1px dashed #ccc; padding-top: 5px;">
-                            <p>কালেক্টর স্বাক্ষর: .......................................</p>
-                            <p>গ্রাহক স্বাক্ষর: ...........................................</p>
-                            <p style="margin-top: 5px; text-align: center;">টাকা হাতে পাওয়ার পর এই অংশটি পূরণ করুন।</p>
-                        </div>
+                    <div class="bill-slip">
+                        <h4>⭐ বকেয়া বিল (নোটিশ)</h4>
+                        <p><strong>গ্রাহক আইডি:</strong> ${item.id}</p>
+                        <p><strong>নাম:</strong> ${item.name}</p>
+                        <p><strong>ফোন:</strong> ${item.phone}</p>
+                        <p><strong>এরিয়া:</strong> ${item.area}</p>
+                        <p><strong>মাসিক প্যাকেজ:</strong> ৳ ${item.package}</p>
+                        <p style="font-size: 1.1em; color: #dc3545;"><strong>মোট বকেয়া: ৳ ${item.amountDue}</strong></p>
+                        <small>অনুগ্রহ করে দ্রুত বিল পরিশোধ করুন।</small>
                     </div>
                 `;
             });
-
-            printContent += `</div></body></html>`;
-
+            
+            printContent += `</body></html>`;
+            
             const printWindow = window.open('', '_blank');
             printWindow.document.write(printContent);
             printWindow.document.close();
+            printWindow.focus();
             printWindow.print();
+            // --- End Print Logic Simulation ---
             
             closeBulkPrintModal();
+            alert(`${printData.length} টি বকেয়া গ্রাহকের জন্য প্রিন্ট ডকুমেন্ট তৈরি করা হয়েছে।`);
         }
+        
+        // --- 13. Data Export Logic ---
+        function exportData(format) {
+             if (currentRole !== USER_ROLES.ADMIN) {
+                alert('এই অ্যাকশনের জন্য আপনার পর্যাপ্ত অনুমতি নেই।');
+                return;
+            }
+            if (format === 'json') {
+                const fullData = {
+                    users: DEMO_USERS,
+                    areas: DEMO_AREAS,
+                    customers: customers,
+                    transactions: transactions,
+                    lastBackup: localStorage.getItem(LOCAL_STORAGE_KEYS.LAST_BACKUP)
+                };
+                
+                const jsonString = JSON.stringify(fullData, null, 2);
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                link.setAttribute('download', `billing_system_backup_${new Date().toLocaleDateString('en-CA')}.json`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                alert('সম্পূর্ণ ডেটা ব্যাকআপ (JSON) ডাউনলোড শুরু হয়েছে।');
+            } else if (format === 'csv') {
+                // Export Customer Data to CSV
+                const headers = ["ID", "নাম", "ফোন", "এরিয়া", "প্যাকেজ (৳)", "স্ট্যাটাস", "বকেয়া", "কালেক্টর"];
+                const csvData = customers.map(c => [
+                    c.id,
+                    `"${c.name}"`,
+                    `"${c.phone}"`,
+                    `"${c.area}"`,
+                    c.package,
+                    `"${c.status}"`,
+                    `"${c.due ? 'হ্যাঁ' : 'না'}"`,
+                    `"${DEMO_USERS[c.collector] ? DEMO_USERS[c.collector].name : 'N/A'}"`
+                ]);
+                
+                let csvContent = headers.join(",") + "\n";
+                csvData.forEach(row => {
+                    csvContent += row.join(",") + "\n";
+                });
+                
+                const blob = new Blob(["\ufeff", csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                link.setAttribute('download', `customer_list_${new Date().toLocaleDateString('en-CA')}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                alert('গ্রাহক ডেটা CSV এক্সপোর্ট শুরু হয়েছে।');
+            }
+        }
+        
 
         // --- 14. Initialization ---
 
@@ -1493,11 +1752,12 @@
                 });
             });
 
-            const isDark = localStorage.getItem('darkMode') === 'true';
-            toggleDarkMode(isDark);
             document.getElementById('darkModeToggle').addEventListener('change', function() {
                 toggleDarkMode(this.checked);
             });
+            
+            const isDark = localStorage.getItem('darkMode') === 'true';
+            toggleDarkMode(isDark);
         }
 
         initializeApp();
@@ -1505,3 +1765,4 @@
     </script>
 </body>
 </html>
+
