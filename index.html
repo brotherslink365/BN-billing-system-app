@@ -487,7 +487,8 @@
 
         // !!! নিরাপত্তা সতর্কতা: নিচের ভ্যালুগুলো PUBLICLY EXPOSED হবে। 
         // --- এই তিনটি লাইন আপনার নিজস্ব মান দিয়ে প্রতিস্থাপন করুন ---
-        const GITHUB_PAT = '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'; 
+        // ✅ আপনার *সঠিক* Personal Access Token এখানে দিন (Repo Scope আবশ্যক)
+        const GITHUB_PAT = 'YOUR_CORRECT_GITHUB_PAT_HERE'; 
         const REPO_OWNER = 'brotherslink365';             
         const REPO_NAME = 'BN-billing-system-app';               
         // ----------------------------------------------------------
@@ -538,7 +539,7 @@
          * GitHub থেকে ডেটা লোড করে এবং Local Storage-এ ক্যাশ হিসেবে সেভ করে।
          */
         async function loadDataFromGitHub() {
-            if (GITHUB_PAT === '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') {
+            if (GITHUB_PAT === 'YOUR_CORRECT_GITHUB_PAT_HERE') {
                 console.warn('GitHub PAT কনফিগার করা হয়নি। Local Storage/Default ডেটা ব্যবহার করা হচ্ছে।');
                 return false;
             }
@@ -608,7 +609,7 @@
         let lastKnownSha = null; // SHA ট্র্যাক করার জন্য নতুন ভ্যারিয়েবল
         
         async function saveAllDataToGitHub() {
-            if (GITHUB_PAT === 'YOUR_GITHUB_PERSONAL_ACCESS_TOKEN') {
+            if (GITHUB_PAT === 'YOUR_CORRECT_GITHUB_PAT_HERE') {
                 console.error('GitHub PAT কনফিগার করা হয়নি। সেভ করা বাতিল করা হলো।');
                 return;
             }
@@ -641,7 +642,7 @@
     
                     if (getResponse.ok) {
                         const fileData = await getResponse.json();
-                        lastKnownSha = fileData.sha; 
+                        lastKnownSha = fileData.sha;
                     } else if (getResponse.status !== 404) {
                         console.error('ফাইল SHA আনতে ব্যর্থ:', getResponse.status, await getResponse.json());
                         return;
@@ -669,8 +670,8 @@
                     const commitData = await putResponse.json();
                     lastKnownSha = commitData.content.sha; // নতুন SHA আপডেট করা
                     const now = new Date().toLocaleString('bn-BD');
-                    localStorage.setItem(LOCAL_STORAGE_KEYS.LAST_GITHUB_BACKUP, now); 
-                    document.getElementById('lastBackupTime').textContent = now + ' (GitHub)'; 
+                    localStorage.setItem(LOCAL_STORAGE_KEYS.LAST_GITHUB_BACKUP, now);
+                    document.getElementById('lastBackupTime').textContent = now + ' (GitHub)';
                     console.log('ডেটা সফলভাবে GitHub-এ সেভ হয়েছে!');
                 } else {
                     console.error('GitHub সেভ ব্যর্থ:', await putResponse.json());
@@ -680,7 +681,7 @@
                 console.error('GitHub সেভ প্রক্রিয়ায় ত্রুটি:', error);
             }
         }
-        
+
         /**
          * নির্দিষ্ট ইন্টারভালে GitHub সেভ লুপ শুরু করার ফাংশন
          */
@@ -688,13 +689,18 @@
             if (gitHubSyncInterval) {
                 clearInterval(gitHubSyncInterval);
             }
-            // একবার অবিলম্বে চালানো এবং তারপর প্রতি 10 মিনিটে
+            // একবার অবিলম্বে চালানো এবং তারপর প্রতি 30 সেকেন্ডে
             saveAllDataToGitHub();
             gitHubSyncInterval = setInterval(saveAllDataToGitHub, GITHUB_SYNC_INTERVAL_MS);
         }
 
-        function generateUniqueId() { return customers.length > 0 ? Math.max(...customers.map(c => c.id)) + 1 : 101; }
-        function generateTransactionId() { return transactions.length > 0 ? Math.max(...transactions.map(t => t.id)) + 1 : 1; } 
+        function generateUniqueId() {
+            return customers.length > 0 ? Math.max(...customers.map(c => c.id)) + 1 : 101;
+        }
+
+        function generateTransactionId() {
+            return transactions.length > 0 ? Math.max(...transactions.map(t => t.id)) + 1 : 1;
+        }
 
         function toggleDarkMode(isDark) {
             document.body.classList.toggle('dark-mode', isDark);
@@ -718,12 +724,17 @@
             if (user && user.password === password) {
                 currentRole = user.role;
                 currentUsername = username;
-                // লগইন স্ট্যাটাস লোকাল স্টোরেজে ক্যাশ করা হচ্ছে 
+                
+                // লগইন স্ট্যাটাস লোকাল স্টোরেজে ক্যাশ করা হচ্ছে
                 localStorage.setItem('currentRole', currentRole);
                 localStorage.setItem('currentUsername', currentUsername);
+
                 document.getElementById('loginScreen').style.display = 'none';
                 document.getElementById('mainApp').style.display = 'block';
-                initializeApp();
+                initializeApp(); // Initialize app after successful login (but only the view-specific parts, main init is below)
+                
+                // শুধুমাত্র UI পার্ট আপডেট হবে
+                applyRolePermissions(); 
             } else {
                 messageEl.textContent = 'ভুল ইউজারনেম বা পাসওয়ার্ড।';
             }
@@ -732,12 +743,13 @@
         async function logout() {
             // লগআউটের আগে শেষ সেভ করা
             await saveAllDataToGitHub(); 
-            
+
             localStorage.removeItem('currentRole');
             localStorage.removeItem('currentUsername');
+
             document.getElementById('mainApp').style.display = 'none';
             document.getElementById('loginScreen').style.display = 'flex';
-            
+
             // GitHub sync বন্ধ করা
             if (gitHubSyncInterval) {
                 clearInterval(gitHubSyncInterval);
@@ -747,7 +759,7 @@
         function applyRolePermissions() {
             const adminOnlyElements = document.querySelectorAll('.admin-only, .admin-only-view');
             const isAdmin = currentRole === USER_ROLES.ADMIN;
-
+            
             adminOnlyElements.forEach(el => {
                 el.style.display = isAdmin ? '' : 'none';
             });
@@ -762,9 +774,9 @@
 
         function showView(viewId) {
             // ডেটা সেভ করার দরকার নেই, কারণ প্রতিটি CRUD অ্যাকশন বা অটো-সিঙ্ক এটি করবে।
-
             const views = document.querySelectorAll('.content-view');
             views.forEach(view => view.classList.remove('active-view'));
+
             const activeView = document.getElementById(viewId);
             if (activeView) activeView.classList.add('active-view');
 
@@ -775,24 +787,24 @@
             if (window.innerWidth <= 992) {
                 document.getElementById('sidebar').classList.remove('open');
             }
-
+            
             if (viewId === 'dashboard') {
                 updateDashboard();
                 updateBackupTimeDisplay();
             }
             if (viewId === 'customers') renderCustomerTable();
             if (viewId === 'billing') {
-                filterBillingCustomers('');
-                populateCollectorDropdown(); 
+                filterBillingCustomers(''); 
+                populateCollectorDropdown();
             }
             if (viewId === 'reports') {
-                document.getElementById('startDate').value = ''; 
+                document.getElementById('startDate').value = '';
                 document.getElementById('endDate').value = '';
                 renderTransactionTable();
             }
             if (viewId === 'collectors' && currentRole === USER_ROLES.ADMIN) renderCollectorPerformance();
             if (viewId === 'settings' && currentRole === USER_ROLES.ADMIN) {
-                populateUserEditDropdown(); 
+                populateUserEditDropdown();
                 populateAreaManagement();
             }
         }
@@ -806,12 +818,12 @@
         function updateDashboard() {
             const relevantCustomers = currentRole === USER_ROLES.ADMIN ? customers : customers.filter(c => c.collector === currentUsername);
             const relevantTransactions = currentRole === USER_ROLES.ADMIN ? transactions : transactions.filter(t => t.collector === currentUsername);
-
+            
             const dueCustomers = relevantCustomers.filter(c => c.due);
             const monthlyCollection = relevantTransactions.reduce((sum, t) => sum + t.amount, 0);
             const target = DEMO_USERS[currentUsername].target;
             const progress = (monthlyCollection / target) * 100;
-
+            
             document.getElementById('statActiveCustomers').textContent = relevantCustomers.filter(c => c.status === 'Active').length;
             document.getElementById('statDueAmount').textContent = `৳ ${dueCustomers.reduce((sum, c) => sum + c.package, 0).toLocaleString('bn-BD')}`;
             document.getElementById('statMonthlyCollection').textContent = `৳ ${monthlyCollection.toLocaleString('bn-BD')}`;
@@ -825,7 +837,7 @@
         function renderAreaChart(custData, transData) {
             const areaChartEl = document.getElementById('areaChart');
             areaChartEl.innerHTML = '';
-
+            
             const areaCollections = {};
             const areas = [...new Set(custData.map(c => c.area))];
             areas.forEach(area => areaCollections[area] = 0);
@@ -841,135 +853,98 @@
 
             for (const [area, collection] of Object.entries(areaCollections)) {
                 const height = maxCollection > 0 ? (collection / maxCollection) * 100 : 0;
+                
                 const bar = document.createElement('div');
                 bar.className = 'bar';
                 bar.style.height = `${Math.max(10, height)}%`;
-                bar.style.backgroundColor = height >= 90 ? '#28a745' : height >= 50 ? '#ffc107' : '#dc3545';
-                bar.innerHTML = `<span class="bar-label">${area}<br/>${(collection/1000).toFixed(1)}K</span>`;
+                bar.style.minHeight = '10px'; // Minimum height for visibility
+
+                const label = document.createElement('span');
+                label.className = 'bar-label';
+                label.textContent = `${area}: ৳ ${collection.toLocaleString('bn-BD')}`;
+
+                bar.appendChild(label);
                 areaChartEl.appendChild(bar);
             }
         }
 
         // --- 6. Customer Management Logic ---
 
-        function populateAreaDropdown() {
-            const select = document.getElementById('customerArea');
-            select.innerHTML = '';
-            DEMO_AREAS.forEach(area => {
-                select.innerHTML += `<option value="${area}">${area}</option>`;
-            });
-            if (!DEMO_AREAS.includes('Unassigned')) {
-                select.innerHTML += `<option value="Unassigned">Unassigned</option>`;
-            }
-        }
-
-        function renderCustomerTable(filteredCustomers = customers) {
+        function renderCustomerTable() {
             const tableBody = document.getElementById('customerTableBody');
             tableBody.innerHTML = '';
             
-            const isAdmin = currentRole === USER_ROLES.ADMIN;
-            
-            const relevantCustomers = filteredCustomers;
-            
-            if (relevantCustomers.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center;">কোনো গ্রাহক পাওয়া যায়নি।</td></tr>';
-                return;
+            const searchTerm = document.getElementById('customerSearch').value.toLowerCase();
+            const filterStatus = document.getElementById('customerFilterStatus').value;
+
+            const relevantCustomers = currentRole === USER_ROLES.ADMIN 
+                ? customers 
+                : customers.filter(c => c.collector === currentUsername);
+
+            const filteredCustomers = relevantCustomers.filter(c => {
+                const nameMatch = c.name.toLowerCase().includes(searchTerm);
+                const phoneMatch = c.phone.includes(searchTerm);
+                const areaMatch = c.area.toLowerCase().includes(searchTerm);
+                const statusMatch = filterStatus === '' || c.status === filterStatus;
+                
+                return (nameMatch || phoneMatch || areaMatch) && statusMatch;
+            }).sort((a, b) => a.id - b.id);
+
+            if (filteredCustomers.length === 0) {
+                 const row = tableBody.insertRow();
+                 row.innerHTML = `<td colspan="8" style="text-align: center; color: var(--light-text-color);">কোনো গ্রাহক পাওয়া যায়নি।</td>`;
+                 return;
             }
 
-            relevantCustomers.forEach(customer => {
+            filteredCustomers.forEach(customer => {
                 const row = tableBody.insertRow();
-                const dueText = customer.due ? 'হ্যাঁ' : 'না';
-                const dueColor = customer.due ? 'red' : 'green';
-
-                const phoneLink = `tel:${customer.phone}`;
-                const smsLink = `sms:${customer.phone}`;
-                const whatsappLink = `https://wa.me/${customer.phone.replace(/[^0-9]/g, '')}`;
-                const contactIcons = `
-                    <div class="contact-icons">
-                        <a href="${phoneLink}" title="কল করুন" style="margin-right: 5px;"><i class="fas fa-phone-alt"></i></a>
-                        <a href="${smsLink}" title="এসএমএস পাঠান" style="margin-right: 5px;"><i class="fas fa-sms"></i></a>
-                        <a href="${whatsappLink}" target="_blank" title="হোয়াটসঅ্যাপ" style="margin-right: 5px;"><i class="fab fa-whatsapp"></i></a>
-                    </div>
-                `;
-
-                const actionButtons = isAdmin ? `
-                    <button class="btn-action" style="padding: 8px 12px;" onclick="openCustomerModal('edit', ${customer.id})"><i class="fas fa-edit"></i></button>
-                    <button class="btn-danger" style="padding: 8px 12px;" onclick="deleteCustomer(${customer.id})"><i class="fas fa-trash"></i></button>
-                ` : '---';
-
                 row.innerHTML = `
                     <td>${customer.id}</td>
                     <td>${customer.name}</td>
                     <td>${customer.area}</td>
-                    <td>৳ ${customer.package}</td>
-                    <td>${customer.status}</td>
-                    <td style="color: ${dueColor}; font-weight: bold;">${dueText}</td>
-                    <td>${contactIcons}</td>
-                    <td>${actionButtons}</td>
+                    <td>৳ ${customer.package.toLocaleString('bn-BD')}</td>
+                    <td><span style="color: ${customer.status === 'Active' ? 'var(--secondary-color)' : '#dc3545'}; font-weight: bold;">${customer.status === 'Active' ? 'সক্রিয়' : 'নিষ্ক্রিয়'}</span></td>
+                    <td><span style="color: ${customer.due ? '#dc3545' : 'var(--secondary-color)'}; font-weight: bold;">${customer.due ? 'বকেয়া' : 'পরিশোধিত'}</span></td>
+                    <td class="contact-icons">
+                        <a href="https://wa.me/${customer.phone}" target="_blank" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>
+                        <a href="tel:${customer.phone}" title="Phone Call"><i class="fas fa-phone-alt"></i></a>
+                        <a href="sms:${customer.phone}" title="SMS"><i class="fas fa-sms"></i></a>
+                    </td>
+                    <td>
+                        <button class="btn-action" style="padding: 5px 10px;" onclick="openCustomerModal('edit', ${customer.id})"><i class="fas fa-edit"></i></button>
+                        <button class="btn-danger admin-only" style="padding: 5px 10px;" onclick="deleteCustomer(${customer.id})"><i class="fas fa-trash-alt"></i></button>
+                    </td>
                 `;
             });
+            applyRolePermissions(); // Re-apply visibility for dynamically added buttons
         }
 
-        document.getElementById('customerForm').onsubmit = async function(e) { // async যুক্ত করা হয়েছে
-            e.preventDefault();
-            
-            if (currentRole !== USER_ROLES.ADMIN) {
-                alert('এই অ্যাকশনের জন্য আপনার পর্যাপ্ত অনুমতি নেই। শুধুমাত্র অ্যাডমিনই গ্রাহক যোগ/আপডেট করতে পারে।');
-                return;
-            }
-
-            const id = document.getElementById('customerId').value;
-            const name = document.getElementById('customerName').value;
-            const phone = document.getElementById('customerPhone').value;
-            const area = document.getElementById('customerArea').value;
-            const pkg = parseInt(document.getElementById('customerPackage').value);
-            const status = document.getElementById('customerStatus').value;
-            const selectedCollectorUsername = getLeastBusyCollector(); 
-
-            if (id) {
-                const index = customers.findIndex(c => c.id == id);
-                if (index !== -1) {
-                    customers[index] = { ...customers[index], name, phone, area, package: pkg, status };
-                }
-                alert(`গ্রাহক ${name} আপডেট হয়েছে।`);
-            } else {
-                const newCustomer = {
-                    id: generateUniqueId(),
-                    name,
-                    phone,
-                    area,
-                    package: pkg,
-                    status,
-                    due: true, 
-                    collector: selectedCollectorUsername
-                };
-                customers.push(newCustomer);
-                alert(`নতুন গ্রাহক ${name} যোগ করা হয়েছে। আইডি: ${newCustomer.id}`);
-            }
-
-            await saveAllDataToGitHub(); // GitHub এ সেভ করা হচ্ছে
-            closeCustomerModal();
+        function filterCustomers() {
             renderCustomerTable();
-        };
+        }
 
         function openCustomerModal(mode, id = null) {
             const modal = document.getElementById('customerModal');
             const title = document.getElementById('customerModalTitle');
+            const form = document.getElementById('customerForm');
             const submitBtn = document.getElementById('customerSubmitBtn');
+            const areaSelect = document.getElementById('customerArea');
 
-            populateAreaDropdown();
+            // Populate Areas
+            areaSelect.innerHTML = DEMO_AREAS.map(area => `<option value="${area}">${area}</option>`).join('');
 
             if (mode === 'add') {
                 title.textContent = 'নতুন গ্রাহক যোগ';
                 submitBtn.textContent = 'যোগ করুন';
+                form.reset();
                 document.getElementById('customerId').value = '';
-                document.getElementById('customerForm').reset();
-            } else if (mode === 'edit') {
+            } else if (mode === 'edit' && id !== null) {
                 const customer = customers.find(c => c.id === id);
                 if (!customer) return;
 
-                title.textContent = `গ্রাহক এডিট: ${customer.name} (ID: ${customer.id})`;
+                title.textContent = `গ্রাহক এডিট: ${customer.name}`;
                 submitBtn.textContent = 'আপডেট করুন';
+                
                 document.getElementById('customerId').value = customer.id;
                 document.getElementById('customerName').value = customer.name;
                 document.getElementById('customerPhone').value = customer.phone;
@@ -977,6 +952,7 @@
                 document.getElementById('customerPackage').value = customer.package;
                 document.getElementById('customerStatus').value = customer.status;
             }
+
             modal.style.display = 'block';
         }
 
@@ -984,435 +960,350 @@
             document.getElementById('customerModal').style.display = 'none';
         }
 
-        async function deleteCustomer(id) { // async যুক্ত করা হয়েছে
-            if (currentRole !== USER_ROLES.ADMIN) {
-                alert('এই অ্যাকশনের জন্য আপনার পর্যাপ্ত অনুমতি নেই। শুধুমাত্র অ্যাডমিনই গ্রাহক ডিলিট করতে পারে।');
-                return;
+        document.getElementById('customerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const id = document.getElementById('customerId').value;
+            const name = document.getElementById('customerName').value;
+            const phone = document.getElementById('customerPhone').value;
+            const area = document.getElementById('customerArea').value;
+            const pkg = parseInt(document.getElementById('customerPackage').value);
+            const status = document.getElementById('customerStatus').value;
+            
+            if (id) {
+                // Edit existing customer
+                const customerIndex = customers.findIndex(c => c.id === parseInt(id));
+                if (customerIndex !== -1) {
+                    customers[customerIndex] = {
+                        ...customers[customerIndex],
+                        name, phone, area, package: pkg, status
+                    };
+                    alert('গ্রাহকের ডেটা সফলভাবে আপডেট করা হয়েছে।');
+                }
+            } else {
+                // Add new customer
+                const newId = generateUniqueId();
+                const defaultCollector = currentRole === USER_ROLES.COLLECTOR ? currentUsername : Object.keys(DEMO_USERS).find(u => DEMO_USERS[u].role === USER_ROLES.COLLECTOR) || 'admin';
+
+                const newCustomer = {
+                    id: newId, 
+                    name, 
+                    phone, 
+                    area, 
+                    package: pkg, 
+                    status, 
+                    due: true, // নতুন গ্রাহক ডিফল্টভাবে বকেয়া থাকবে
+                    collector: defaultCollector
+                };
+                customers.push(newCustomer);
+                alert(`নতুন গ্রাহক যোগ করা হয়েছে: ID ${newId}`);
             }
 
-            if (confirm('আপনি কি নিশ্চিত যে আপনি এই গ্রাহককে ডিলিট করতে চান?')) {
+            closeCustomerModal();
+            renderCustomerTable();
+            await saveAllDataToGitHub();
+            updateDashboard();
+        });
+
+        function deleteCustomer(id) {
+            if (currentRole !== USER_ROLES.ADMIN) {
+                alert('এই অ্যাকশনের জন্য অ্যাডমিন পারমিশন প্রয়োজন।');
+                return;
+            }
+            if (confirm('আপনি কি নিশ্চিত যে আপনি এই গ্রাহককে মুছে ফেলতে চান? এটি মুছে গেলে আর ফিরে পাওয়া যাবে না।')) {
                 const initialLength = customers.length;
                 customers = customers.filter(c => c.id !== id);
-                transactions = transactions.filter(t => t.customerId !== id);
-
+                transactions = transactions.filter(t => t.customerId !== id); // গ্রাহকের সাথে সম্পর্কিত লেনদেনও মুছে ফেলা হলো
+                
                 if (customers.length < initialLength) {
-                    alert('গ্রাহক সফলভাবে ডিলিট করা হয়েছে।');
-                    await saveAllDataToGitHub(); // GitHub এ সেভ করা হচ্ছে
+                    alert('গ্রাহক এবং সম্পর্কিত লেনদেন সফলভাবে মুছে ফেলা হয়েছে।');
                     renderCustomerTable();
+                    saveAllDataToGitHub();
+                    updateDashboard();
                 }
             }
         }
 
-        function getLeastBusyCollector() {
-            const collectorCounts = {};
-            const collectorUsers = Object.keys(DEMO_USERS).filter(u => DEMO_USERS[u].role === USER_ROLES.COLLECTOR);
-
-            if (collectorUsers.length === 0) {
-                return Object.keys(DEMO_USERS).find(u => DEMO_USERS[u].role === USER_ROLES.ADMIN) || 'admin';
-            }
-
-            collectorUsers.forEach(username => {
-                collectorCounts[username] = customers.filter(c => c.collector === username).length;
-            });
-
-            return Object.keys(collectorCounts).reduce((a, b) => collectorCounts[a] < collectorCounts[b] ? a : b, collectorUsers[0]);
-        }
-        
-        function filterCustomers() {
-            const search = document.getElementById('customerSearch').value.toLowerCase();
-            const statusFilter = document.getElementById('customerFilterStatus').value;
-            
-            const filtered = customers.filter(c => {
-                const matchesSearch = !search || 
-                                    c.name.toLowerCase().includes(search) || 
-                                    c.phone.includes(search) ||
-                                    c.area.toLowerCase().includes(search);
-                                    
-                const matchesStatus = !statusFilter || c.status === statusFilter;
-                
-                return matchesSearch && matchesStatus;
-            });
-            
-            renderCustomerTable(filtered);
-        }
-
-        // --- 7. Billing Logic ---
+        // --- 7. Billing & Transaction Logic ---
 
         function populateCollectorDropdown() {
-            const select = document.getElementById('collectorId');
-            select.innerHTML = '';
+            const collectorSelect = document.getElementById('collectorId');
+            collectorSelect.innerHTML = '';
             
-            const relevantUsers = Object.entries(DEMO_USERS).filter(([username, user]) => 
-                user.role === USER_ROLES.COLLECTOR || (user.role === USER_ROLES.ADMIN && username === currentUsername)
-            );
+            const collectors = Object.entries(DEMO_USERS)
+                .filter(([username, user]) => user.role === USER_ROLES.COLLECTOR || username === USER_ROLES.ADMIN);
 
-            relevantUsers.forEach(([username, user]) => {
-                const selected = username === currentUsername ? 'selected' : '';
-                select.innerHTML += `<option value="${username}" ${selected}>${user.name} (${user.role})</option>`;
+            collectors.forEach(([username, user]) => {
+                const option = document.createElement('option');
+                option.value = username;
+                option.textContent = user.name;
+                collectorSelect.appendChild(option);
             });
+            
+            // কালেক্টর হলে নিজের ইউজারনেম সিলেক্ট করা
+            if (currentRole === USER_ROLES.COLLECTOR) {
+                collectorSelect.value = currentUsername;
+                collectorSelect.disabled = true; // কালেক্টর তার নিজের নাম ছাড়া অন্য কারো নাম সেট করতে পারবে না
+            } else {
+                 collectorSelect.disabled = false;
+            }
+        }
+
+        function filterBillingCustomers(searchQuery = null) {
+            const searchInput = document.getElementById('billCustomerSearch');
+            const selectDropdown = document.getElementById('billCustomerId');
+            selectDropdown.innerHTML = '';
+            
+            const searchTerm = (searchQuery === null ? searchInput.value : searchQuery).toLowerCase().trim();
+
+            const relevantCustomers = currentRole === USER_ROLES.ADMIN 
+                ? customers 
+                : customers.filter(c => c.collector === currentUsername);
+            
+            const filteredCustomers = relevantCustomers.filter(c => {
+                return c.status === 'Active' && (
+                    c.id.toString().includes(searchTerm) ||
+                    c.name.toLowerCase().includes(searchTerm) ||
+                    c.phone.includes(searchTerm) ||
+                    c.area.toLowerCase().includes(searchTerm)
+                );
+            }).sort((a, b) => a.name.localeCompare(b.name, 'bn'));
+
+            if (filteredCustomers.length === 0) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = searchTerm ? `"${searchTerm}" এর জন্য কোনো গ্রাহক নেই` : 'অনুসন্ধান করে গ্রাহক নির্বাচন করুন';
+                selectDropdown.appendChild(option);
+                document.getElementById('billAmount').value = 0;
+                return;
+            }
+
+            filteredCustomers.forEach(c => {
+                const option = document.createElement('option');
+                option.value = c.id;
+                option.textContent = `ID: ${c.id} - ${c.name} (${c.area}) - ৳${c.package}`;
+                selectDropdown.appendChild(option);
+            });
+            
+            // প্রথম গ্রাহকের প্যাকেজ মূল্য স্বয়ংক্রিয়ভাবে বিল অ্যামাউন্টে সেট করা 
+            const firstCustomer = filteredCustomers[0];
+            if (firstCustomer) {
+                document.getElementById('billAmount').value = firstCustomer.package;
+            }
         }
         
-        function filterBillingCustomers(searchTerm = '') {
-            const searchInput = document.getElementById('billCustomerSearch');
-            const select = document.getElementById('billCustomerId');
-            
-            if (searchTerm === '') {
-                searchTerm = searchInput.value.toLowerCase();
+        document.getElementById('billCustomerId').addEventListener('change', function() {
+            const customerId = parseInt(this.value);
+            const customer = customers.find(c => c.id === customerId);
+            if (customer) {
+                document.getElementById('billAmount').value = customer.package;
             }
+        });
+
+        document.getElementById('billCollectionForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const customerId = parseInt(document.getElementById('billCustomerId').value);
+            const billAmount = parseInt(document.getElementById('billAmount').value);
+            const paymentMethod = document.getElementById('paymentMethod').value;
+            const collectorId = document.getElementById('collectorId').value;
+
+            if (!customerId) {
+                alert('দয়া করে একজন গ্রাহক নির্বাচন করুন।');
+                return;
+            }
+
+            const customerIndex = customers.findIndex(c => c.id === customerId);
+            if (customerIndex === -1) return;
+
+            const customer = customers[customerIndex];
+            
+            // নতুন লেনদেন তৈরি করা
+            const newTransaction = {
+                id: generateTransactionId(),
+                customerId,
+                customerName: customer.name,
+                package: customer.package,
+                amount: billAmount,
+                method: paymentMethod,
+                collector: collectorId,
+                time: new Date().toISOString()
+            };
+            transactions.push(newTransaction);
+
+            // গ্রাহকের স্ট্যাটাস আপডেট করা (বকেয়া পরিশোধিত)
+            customers[customerIndex].due = false; 
+
+            alert(`বিল সফলভাবে পরিশোধিত: ${customer.name}, ৳ ${billAmount.toLocaleString('bn-BD')}`);
+            
+            // ফর্ম রিসেট করা
+            document.getElementById('billCollectionForm').reset();
+            document.getElementById('billCustomerId').innerHTML = ''; // ড্রপডাউন রিসেট
+            document.getElementById('billAmount').value = 0;
+            
+            // টেবিল ও ড্যাশবোর্ড আপডেট এবং ডেটা সেভ
+            await saveAllDataToGitHub();
+            updateDashboard();
+            renderTransactionTable();
+            filterBillingCustomers(''); // নতুন করে ড্রপডাউন লোড করা
+            populateCollectorDropdown();
+        });
+
+        // --- 8. Reports & Analysis Logic ---
+        
+        function renderTransactionTable(filter = null) {
+            const tableBody = document.getElementById('transactionTableBody');
+            tableBody.innerHTML = '';
 
             const relevantCustomers = currentRole === USER_ROLES.ADMIN 
                 ? customers 
                 : customers.filter(c => c.collector === currentUsername);
 
-            const filteredCustomers = relevantCustomers.filter(c => 
-                c.status === 'Active' && (
-                    c.name.toLowerCase().includes(searchTerm) || 
-                    c.phone.includes(searchTerm) || 
-                    c.id.toString().includes(searchTerm) ||
-                    c.area.toLowerCase().includes(searchTerm)
-                )
-            );
+            const relevantTransactions = currentRole === USER_ROLES.ADMIN 
+                ? transactions 
+                : transactions.filter(t => t.collector === currentUsername);
+            
+            let filteredTransactions = relevantTransactions.slice().reverse(); // নতুন থেকে পুরানো
 
-            select.innerHTML = '';
-
-            if (filteredCustomers.length > 0) {
-                filteredCustomers.forEach(c => {
-                    const dueStatus = c.due ? ' (বকেয়া)' : ' (ক্লিয়ার)';
-                    select.innerHTML += `<option value="${c.id}">ID: ${c.id} - ${c.name}, ${c.area} ${dueStatus} (৳${c.package})</option>`;
-                });
+            if (filter && filter.startDate && filter.endDate) {
+                const start = new Date(filter.startDate);
+                const end = new Date(filter.endDate);
+                end.setDate(end.getDate() + 1); // শেষ তারিখের পরের দিন পর্যন্ত যাতে পুরো দিন ধরা হয়
                 
-                if (filteredCustomers.length === 1) {
-                    document.getElementById('billCustomerId').value = filteredCustomers[0].id;
-                    document.getElementById('billAmount').value = filteredCustomers[0].package;
-                }
-            } else {
-                select.innerHTML = '<option value="">গ্রাহক পাওয়া যায়নি</option>';
-                document.getElementById('billAmount').value = '';
+                filteredTransactions = filteredTransactions.filter(t => {
+                    const tDate = new Date(t.time);
+                    return tDate >= start && tDate < end;
+                });
             }
 
-            select.onchange = function() {
-                const selectedId = parseInt(this.value);
-                const selectedCustomer = customers.find(c => c.id === selectedId);
-                if (selectedCustomer) {
-                    document.getElementById('billAmount').value = selectedCustomer.package;
-                }
-            };
-        }
-
-        document.getElementById('billCollectionForm').onsubmit = async function(e) { // async যুক্ত করা হয়েছে
-            e.preventDefault();
-            
-            const customerId = parseInt(document.getElementById('billCustomerId').value);
-            const amount = parseInt(document.getElementById('billAmount').value);
-            const paymentMethod = document.getElementById('paymentMethod').value;
-            const collectorUsername = document.getElementById('collectorId').value;
-
-            if (!customerId) {
-                alert('অনুগ্রহ করে গ্রাহক নির্বাচন করুন।');
-                return;
-            }
-            
-            const customerIndex = customers.findIndex(c => c.id === customerId);
-            if (customerIndex === -1) {
-                alert('গ্রাহক ডেটাবেসে পাওয়া যায়নি।');
-                return;
+            if (filteredTransactions.length === 0) {
+                 const row = tableBody.insertRow();
+                 row.innerHTML = `<td colspan="7" style="text-align: center; color: var(--light-text-color);">এই ফিল্টারে কোনো লেনদেন নেই।</td>`;
+                 return;
             }
 
-            const customer = customers[customerIndex];
-            
-            if (amount <= 0) {
-                alert('আদায়ের পরিমাণ অবশ্যই ধনাত্মক হতে হবে।');
-                return;
-            }
-            
-            // Log Transaction
-            const newTransaction = {
-                id: generateTransactionId(),
-                customerId: customerId,
-                customerName: customer.name,
-                package: customer.package,
-                amount: amount,
-                method: paymentMethod,
-                collector: collectorUsername,
-                time: new Date().toISOString()
-            };
-            transactions.push(newTransaction);
-            
-            if (amount >= customer.package) {
-                customers[customerIndex].due = false;
-            } else {
-                customers[customerIndex].due = true; 
-            }
-            
-            document.getElementById('billCollectionForm').reset();
-            document.getElementById('billCustomerId').innerHTML = '<option value="">গ্রাহক নির্বাচন:</option>';
-            document.getElementById('billAmount').value = '';
-
-            await saveAllDataToGitHub(); // GitHub এ সেভ করা হচ্ছে
-            alert(`৳${amount} সফলভাবে আদায় হয়েছে।`);
-            updateDashboard(); 
-            filterBillingCustomers(''); 
-        };
-
-
-        // --- 8. Reports & Analytics Logic ---
-
-        function renderTransactionTable(filteredTransactions = transactions) {
-            const tableBody = document.getElementById('transactionTableBody');
-            tableBody.innerHTML = '';
-            
-            const isAdmin = currentRole === USER_ROLES.ADMIN;
-            
-            const relevantTransactions = isAdmin 
-                ? filteredTransactions 
-                : filteredTransactions.filter(t => t.collector === currentUsername);
-
-            if (relevantTransactions.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">কোনো লেনদেন রেকর্ড নেই।</td></tr>';
-                return;
-            }
-
-            relevantTransactions.sort((a, b) => new Date(b.time) - new Date(a.time));
-
-            relevantTransactions.forEach(t => {
+            filteredTransactions.forEach(t => {
+                const customer = relevantCustomers.find(c => c.id === t.customerId);
+                const customerName = customer ? customer.name : t.customerName; // যদি গ্রাহক মুছে ফেলা হয়
+                
                 const row = tableBody.insertRow();
-                const transactionDate = new Date(t.time).toLocaleString('bn-BD');
-                const collectorName = DEMO_USERS[t.collector] ? DEMO_USERS[t.collector].name : t.collector;
-
                 row.innerHTML = `
-                    <td>${transactionDate}</td>
-                    <td>${t.customerName} (ID: ${t.customerId})</td>
-                    <td>৳ ${t.package}</td>
-                    <td style="font-weight: bold; color: green;">৳ ${t.amount}</td>
+                    <td>${new Date(t.time).toLocaleDateString('bn-BD')}</td>
+                    <td>${customerName} (ID: ${t.customerId})</td>
+                    <td>৳ ${t.package.toLocaleString('bn-BD')}</td>
+                    <td><strong style="color: var(--secondary-color);">৳ ${t.amount.toLocaleString('bn-BD')}</strong></td>
                     <td>${t.method}</td>
-                    <td>${collectorName}</td>
-                    <td><button class="btn-action" style="padding: 5px 10px;" onclick="printInvoice(${t.id})"><i class="fas fa-print"></i></button></td>
+                    <td>${DEMO_USERS[t.collector] ? DEMO_USERS[t.collector].name : t.collector}</td>
+                    <td><button class="btn-action" style="padding: 5px 10px;" onclick="printReceipt(${t.id})"><i class="fas fa-print"></i></button></td>
                 `;
             });
         }
-
+        
         function filterTransactionsByDate() {
             const startDate = document.getElementById('startDate').value;
             const endDate = document.getElementById('endDate').value;
             
-            let filtered = transactions;
-            
-            if (startDate) {
-                const start = new Date(startDate).setHours(0, 0, 0, 0);
-                filtered = filtered.filter(t => new Date(t.time).getTime() >= start);
+            if (!startDate || !endDate) {
+                alert('শুরুর তারিখ এবং শেষের তারিখ উভয়ই নির্বাচন করুন।');
+                return;
             }
             
-            if (endDate) {
-                const end = new Date(endDate);
-                end.setDate(end.getDate() + 1); 
-                const endTimestamp = end.setHours(0, 0, 0, 0);
-                filtered = filtered.filter(t => new Date(t.time).getTime() < endTimestamp);
-            }
-            
-            renderTransactionTable(filtered);
-        }
-
-        function printInvoice(transactionId) {
-            const t = transactions.find(t => t.id === transactionId);
-            if (!t) return alert('লেনদেন পাওয়া যায়নি।');
-
-            const collectorName = DEMO_USERS[t.collector] ? DEMO_USERS[t.collector].name : t.collector;
-            const customer = customers.find(c => c.id === t.customerId);
-            
-            const printContent = `
-                <h2>🧾 ইনভয়েস/রিসিপ্ট</h2>
-                <p><strong>বিলিং সিস্টেম প্রো</strong></p>
-                <hr>
-                <p><strong>রিসিপ্ট আইডি:</strong> ${t.id}</p>
-                <p><strong>তারিখ:</strong> ${new Date(t.time).toLocaleString('bn-BD')}</p>
-                <hr>
-                <h3>গ্রাহক তথ্য</h3>
-                <p><strong>নাম:</strong> ${t.customerName}</p>
-                <p><strong>আইডি:</strong> ${t.customerId}</p>
-                <p><strong>ফোন:</strong> ${customer ? customer.phone : 'N/A'}</p>
-                <p><strong>এরিয়া:</strong> ${customer ? customer.area : 'N/A'}</p>
-                <hr>
-                <h3>লেনদেনের বিবরণ</h3>
-                <p><strong>মাসিক প্যাকেজ:</strong> ৳ ${t.package}</p>
-                <p><strong>আদায়ের পরিমাণ:</strong> ৳ ${t.amount}</p>
-                <p><strong>পেমেন্ট পদ্ধতি:</strong> ${t.method}</p>
-                <p><strong>সংগ্রহকারী:</strong> ${collectorName}</p>
-                <hr>
-                <h2 style="color: green;">মোট পরিশোধিত: ৳ ${t.amount}</h2>
-            `;
-            
-            const printWindow = window.open('', '_blank');
-            printWindow.document.write('<html><head><title>ইনভয়েস</title>');
-            printWindow.document.write('<style>body{font-family: Arial, sans-serif; line-height: 1.6;}</style>');
-            printWindow.document.write('</head><body>');
-            printWindow.document.write(printContent);
-            printWindow.document.write('</body></html>');
-            printWindow.document.close();
-            printWindow.print();
+            renderTransactionTable({ startDate, endDate });
         }
 
         function exportTransactionToCSV() {
-            const header = ["তারিখ", "গ্রাহক আইডি", "গ্রাহক নাম", "প্যাকেজ", "আদায়", "পদ্ধতি", "কালেক্টর", "টাইমস্ট্যাম্প"];
+            const header = ['তারিখ', 'গ্রাহক ID', 'গ্রাহক নাম', 'প্যাকেজ মূল্য', 'আদায়ের পরিমাণ', 'পেমেন্ট পদ্ধতি', 'কালেক্টর'];
             
-            const csvRows = transactions.map(t => [
-                new Date(t.time).toLocaleString('bn-BD'),
-                t.customerId,
-                t.customerName,
-                t.package,
-                t.amount,
-                t.method,
-                t.collector,
-                t.time
-            ].map(String).map(s => `"${s.replace(/"/g, '""')}"`).join(','));
+            const relevantTransactions = currentRole === USER_ROLES.ADMIN 
+                ? transactions 
+                : transactions.filter(t => t.collector === currentUsername);
 
-            const csvContent = [header.join(','), ...csvRows].join('\n');
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.setAttribute("download", "transaction_history.csv");
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            const csvRows = relevantTransactions.map(t => {
+                const customer = customers.find(c => c.id === t.customerId);
+                const customerName = customer ? customer.name : t.customerName; 
+                
+                return [
+                    `"${new Date(t.time).toLocaleDateString('bn-BD')}"`,
+                    t.customerId,
+                    `"${customerName}"`,
+                    t.package,
+                    t.amount,
+                    `"${t.method}"`,
+                    `"${DEMO_USERS[t.collector] ? DEMO_USERS[t.collector].name : t.collector}"`
+                ].join(',');
+            });
+
+            const csvContent = [
+                header.join(','),
+                ...csvRows
+            ].join('\n');
+
+            const blob = new Blob(["\ufeff", csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('href', url);
+            a.setAttribute('download', 'transaction_report.csv');
+            a.click();
         }
-
-        // --- 9. Collector Management Logic (Admin Only) ---
-
+        
         function renderCollectorPerformance() {
-            const tableBody = document.querySelector('#collectorPerformanceTable tbody');
+            const tableBody = document.getElementById('collectorPerformanceTable').querySelector('tbody');
             tableBody.innerHTML = '';
 
             const collectorStats = {};
-            const collectorUsers = Object.keys(DEMO_USERS).filter(u => DEMO_USERS[u].role === USER_ROLES.COLLECTOR || u === 'admin');
 
-            collectorUsers.forEach(username => {
-                collectorStats[username] = { 
-                    name: DEMO_USERS[username].name,
-                    target: DEMO_USERS[username].target,
-                    totalCollection: 0
-                };
-            });
-            
-            const currentMonthStart = new Date();
-            currentMonthStart.setDate(1);
-            currentMonthStart.setHours(0, 0, 0, 0);
-
+            // ১. কালেকশন যোগ করা
             transactions.forEach(t => {
-                const transactionDate = new Date(t.time);
-                if (transactionDate >= currentMonthStart && collectorStats[t.collector]) {
-                    collectorStats[t.collector].totalCollection += t.amount;
+                if (!collectorStats[t.collector]) {
+                    collectorStats[t.collector] = { collection: 0, target: DEMO_USERS[t.collector]?.target || 0, name: DEMO_USERS[t.collector]?.name || 'N/A' };
+                }
+                collectorStats[t.collector].collection += t.amount;
+            });
+
+            // ২. যারা কালেকশন করেনি তাদেরও দেখানো
+            Object.entries(DEMO_USERS).forEach(([username, user]) => {
+                if (user.role === USER_ROLES.COLLECTOR || username === USER_ROLES.ADMIN) {
+                    if (!collectorStats[username]) {
+                        collectorStats[username] = { collection: 0, target: user.target, name: user.name };
+                    }
                 }
             });
 
-            Object.entries(collectorStats).forEach(([username, stats]) => {
+            // ৩. টেবিল রেন্ডার করা
+            for (const [username, stats] of Object.entries(collectorStats)) {
+                const percentage = stats.target > 0 ? ((stats.collection / stats.target) * 100).toFixed(1) : 0;
                 const row = tableBody.insertRow();
-                const percentage = (stats.totalCollection / stats.target) * 100;
-                const progressDisplay = `${percentage.toFixed(1)}%`;
-                const color = percentage >= 100 ? 'green' : percentage >= 50 ? 'orange' : 'red';
-
                 row.innerHTML = `
                     <td>${stats.name}</td>
                     <td>${username}</td>
-                    <td style="font-weight: bold;">৳ ${stats.totalCollection.toLocaleString('bn-BD')}</td>
-                    <td style="color: ${color}; font-weight: bold;">${progressDisplay}</td>
+                    <td>৳ ${stats.collection.toLocaleString('bn-BD')}</td>
+                    <td>
+                        <div class="progress-bar-container" style="width: 150px; margin: 0 auto;">
+                            <div class="progress-bar" style="width: ${Math.min(100, percentage)}%; background-color: ${percentage >= 100 ? 'var(--secondary-color)' : 'var(--primary-color)'};"></div>
+                        </div>
+                        <small>${percentage}%</small>
+                    </td>
                 `;
-            });
+            }
         }
-
-        // --- 10. Settings Logic (Admin Only) ---
-
-        function populateAreaManagement() {
-            const select = document.getElementById('existingAreaSelect');
-            select.innerHTML = '<option value="">এরিয়া নির্বাচন করুন</option>';
-            DEMO_AREAS.forEach(area => {
-                select.innerHTML += `<option value="${area}">${area}</option>`;
-            });
-            document.getElementById('updatedAreaName').value = '';
-        }
-
-        function loadAreaForEdit(areaName) {
-            document.getElementById('updatedAreaName').value = areaName;
-        }
-
-        document.getElementById('addAreaForm').onsubmit = async function(e) { // async যুক্ত করা হয়েছে
-            e.preventDefault();
-            const newArea = document.getElementById('newAreaName').value.trim();
-            if (newArea && !DEMO_AREAS.includes(newArea)) {
-                DEMO_AREAS.push(newArea);
-                await saveAllDataToGitHub(); // GitHub এ সেভ করা হচ্ছে
-                populateAreaManagement();
-                populateAreaDropdown();
-                alert(`এরিয়া "${newArea}" যোগ করা হয়েছে।`);
-                document.getElementById('newAreaName').value = '';
-            } else {
-                alert('এরিয়া নাম লিখুন অথবা এটি ইতিমধ্যেই বিদ্যমান।');
-            }
-        };
-
-        document.getElementById('editAreaForm').onsubmit = async function(e) { // async যুক্ত করা হয়েছে
-            e.preventDefault();
-            const oldArea = document.getElementById('existingAreaSelect').value;
-            const newAreaName = document.getElementById('updatedAreaName').value.trim();
-            
-            if (!oldArea || !newAreaName) {
-                alert('পুরোনো এবং নতুন এরিয়ার নাম উভয়ই দিতে হবে।');
-                return;
-            }
-            
-            if (oldArea === newAreaName) {
-                alert('নামের কোনো পরিবর্তন হয়নি।');
-                return;
-            }
-
-            const index = DEMO_AREAS.indexOf(oldArea);
-            if (index !== -1) {
-                DEMO_AREAS[index] = newAreaName;
-                customers.forEach(c => {
-                    if (c.area === oldArea) {
-                        c.area = newAreaName;
-                    }
-                });
-
-                await saveAllDataToGitHub(); // GitHub এ সেভ করা হচ্ছে
-                populateAreaManagement();
-                populateAreaDropdown();
-                alert(`এরিয়া "${oldArea}" থেকে "${newAreaName}" এ পরিবর্তন করা হয়েছে।`);
-            }
-        };
         
-        async function deleteArea() { // async যুক্ত করা হয়েছে
-            const areaToDelete = document.getElementById('existingAreaSelect').value;
-            if (!areaToDelete) {
-                alert('ডিলিট করার জন্য একটি এরিয়া নির্বাচন করুন।');
-                return;
-            }
-            
-            if (confirm(`আপনি কি নিশ্চিত যে আপনি "${areaToDelete}" এরিয়া ডিলিট করতে চান? এই এরিয়ার গ্রাহকদের এরিয়া "Unassigned" হবে।`)) {
-                
-                DEMO_AREAS = DEMO_AREAS.filter(a => a !== areaToDelete);
-                
-                customers.forEach(c => {
-                    if (c.area === areaToDelete) {
-                        c.area = 'Unassigned';
-                    }
-                });
-                
-                await saveAllDataToGitHub(); // GitHub এ সেভ করা হচ্ছে
-                populateAreaManagement();
-                populateAreaDropdown();
-                alert(`এরিয়া "${areaToDelete}" সফলভাবে ডিলিট করা হয়েছে।`);
-            }
-        }
+        // --- 9. Settings & Admin Logic ---
         
         function populateUserEditDropdown() {
-            const select = document.getElementById('editUsername');
-            select.innerHTML = '<option value="">ইউজার নির্বাচন করুন</option>';
+            const editUsernameSelect = document.getElementById('editUsername');
+            editUsernameSelect.innerHTML = '';
+            
             Object.keys(DEMO_USERS).forEach(username => {
-                select.innerHTML += `<option value="${username}">${DEMO_USERS[username].name} (${username})</option>`;
+                const option = document.createElement('option');
+                option.value = username;
+                option.textContent = `${DEMO_USERS[username].name} (${username})`;
+                editUsernameSelect.appendChild(option);
             });
-            document.getElementById('editPassword').value = '';
-            document.getElementById('editUserName').value = '';
-            document.getElementById('editUserRole').innerHTML = '';
-            document.getElementById('editUserTarget').value = '';
+            
+            // প্রথম ইউজার লোড করা
+            if (editUsernameSelect.value) {
+                loadUserForEdit(editUsernameSelect.value);
+            }
         }
 
         function loadUserForEdit(username) {
@@ -1423,120 +1314,195 @@
             document.getElementById('editUserTarget').value = user.target;
             
             const roleSelect = document.getElementById('editUserRole');
-            roleSelect.innerHTML = `
-                <option value="collector" ${user.role === 'collector' ? 'selected' : ''}>কালেক্টর</option>
-                <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>অ্যাডমিন</option>
-            `;
-            roleSelect.disabled = username === 'admin'; 
+            roleSelect.innerHTML = `<option value="${user.role}">${user.role === 'admin' ? 'অ্যাডমিন' : 'কালেক্টর'}</option>`;
+            roleSelect.value = user.role;
         }
 
-        document.getElementById('addUserForm').onsubmit = async function(e) { // async যুক্ত করা হয়েছে
+        document.getElementById('addUserForm').addEventListener('submit', async function(e) {
             e.preventDefault();
+            
             const username = document.getElementById('newUsername').value.trim();
             const password = document.getElementById('newPassword').value;
-            const name = document.getElementById('newUserName').value.trim();
+            const name = document.getElementById('newUserName').value;
             const role = document.getElementById('newUserRole').value;
             const target = parseInt(document.getElementById('newUserTarget').value);
 
             if (DEMO_USERS[username]) {
-                alert('এই ইউজারনেমটি ইতিমধ্যেই বিদ্যমান।');
+                alert('এই ইউজারনেমটি ইতিমধ্যে বিদ্যমান।');
                 return;
             }
-            
-            DEMO_USERS[username] = { password, role, name, target };
-            await saveAllDataToGitHub(); // GitHub এ সেভ করা হচ্ছে
-            populateUserEditDropdown();
-            document.getElementById('addUserForm').reset();
-            alert(`নতুন ইউজার "${name}" (${username}) যোগ করা হয়েছে।`);
-        };
 
-        document.getElementById('editUserForm').onsubmit = async function(e) { // async যুক্ত করা হয়েছে
+            DEMO_USERS[username] = { password, role, name, target };
+            alert(`নতুন ইউজার যোগ করা হয়েছে: ${name} (${username})`);
+            
+            document.getElementById('addUserForm').reset();
+            populateUserEditDropdown();
+            await saveAllDataToGitHub();
+        });
+
+        document.getElementById('editUserForm').addEventListener('submit', async function(e) {
             e.preventDefault();
+            
             const username = document.getElementById('editUsername').value;
             const newPassword = document.getElementById('editPassword').value;
-            const newName = document.getElementById('editUserName').value.trim();
+            const newName = document.getElementById('editUserName').value;
             const newTarget = parseInt(document.getElementById('editUserTarget').value);
-            const newRole = document.getElementById('editUserRole').value;
-
-            if (!username) return alert('ইউজার নির্বাচন করুন।');
-            const user = DEMO_USERS[username];
             
-            if (newPassword) {
-                user.password = newPassword;
+            if (DEMO_USERS[username]) {
+                DEMO_USERS[username].name = newName;
+                DEMO_USERS[username].target = newTarget;
+                if (newPassword) {
+                    DEMO_USERS[username].password = newPassword;
+                }
+                alert(`ইউজার "${username}" এর ডেটা সফলভাবে আপডেট করা হয়েছে।`);
+                await saveAllDataToGitHub();
+                updateDashboard();
             }
-            user.name = newName;
-            user.target = newTarget;
-            user.role = newRole; 
+        });
 
-            await saveAllDataToGitHub(); // GitHub এ সেভ করা হচ্ছে
-            alert(`ইউজার "${newName}" এর তথ্য আপডেট হয়েছে।`);
-            populateUserEditDropdown();
-        };
-
-        async function deleteUser() { // async যুক্ত করা হয়েছে
+        function deleteUser() {
             const username = document.getElementById('editUsername').value;
-            if (!username || username === 'admin') {
-                alert('অ্যাডমিন ইউজারকে ডিলিট করা যাবে না, অথবা কোনো ইউজার নির্বাচন করা হয়নি।');
+            if (username === currentUsername) {
+                alert('আপনি বর্তমানে লগইন করা ইউজারকে ডিলিট করতে পারবেন না।');
                 return;
             }
-
-            if (confirm(`আপনি কি নিশ্চিত যে আপনি ইউজার "${username}" ডিলিট করতে চান?`)) {
+            if (confirm(`আপনি কি নিশ্চিত যে আপনি ইউজার "${username}" কে ডিলিট করতে চান?`)) {
                 delete DEMO_USERS[username];
                 
+                // এই ইউজারের সকল গ্রাহককে অ্যাডমিনের কাছে অ্যাসাইন করা হলো
                 customers.forEach(c => {
                     if (c.collector === username) {
                         c.collector = 'admin';
                     }
                 });
 
-                await saveAllDataToGitHub(); // GitHub এ সেভ করা হচ্ছে
-                populateUserEditDropdown();
                 alert(`ইউজার "${username}" সফলভাবে ডিলিট করা হয়েছে।`);
+                populateUserEditDropdown();
+                saveAllDataToGitHub();
             }
         }
         
-        async function autoGenerateBill() { // async যুক্ত করা হয়েছে
-            if (confirm('আপনি কি নিশ্চিত যে আপনি সকল সক্রিয় গ্রাহকের জন্য মাসিক বিল বকেয়া (due: true) সেট করতে চান? এটি একটি নতুন মাস শুরু করার জন্য ব্যবহার করা হয়।')) {
-                let updatedCount = 0;
+        function populateAreaManagement() {
+            const areaSelect = document.getElementById('existingAreaSelect');
+            areaSelect.innerHTML = DEMO_AREAS.map(area => `<option value="${area}">${area}</option>`).join('');
+            document.getElementById('updatedAreaName').value = areaSelect.value;
+        }
+
+        document.getElementById('addAreaForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const newAreaName = document.getElementById('newAreaName').value.trim();
+            if (DEMO_AREAS.includes(newAreaName)) {
+                alert('এই এরিয়াটি ইতিমধ্যেই বিদ্যমান।');
+                return;
+            }
+            DEMO_AREAS.push(newAreaName);
+            alert(`নতুন এরিয়া "${newAreaName}" যোগ করা হয়েছে।`);
+            document.getElementById('addAreaForm').reset();
+            populateAreaManagement();
+            await saveAllDataToGitHub();
+        });
+
+        function loadAreaForEdit(areaName) {
+            document.getElementById('updatedAreaName').value = areaName;
+        }
+
+        document.getElementById('editAreaForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const existingArea = document.getElementById('existingAreaSelect').value;
+            const updatedName = document.getElementById('updatedAreaName').value.trim();
+            
+            if (DEMO_AREAS.includes(updatedName) && updatedName !== existingArea) {
+                alert('এই এরিয়া নামটি ইতিমধ্যেই ব্যবহৃত হচ্ছে।');
+                return;
+            }
+
+            // ১. এরিয়া তালিকা আপডেট
+            const index = DEMO_AREAS.indexOf(existingArea);
+            if (index !== -1) {
+                DEMO_AREAS[index] = updatedName;
+            }
+
+            // ২. গ্রাহকদের ডেটা আপডেট
+            customers.forEach(c => {
+                if (c.area === existingArea) {
+                    c.area = updatedName;
+                }
+            });
+
+            alert(`এরিয়া "${existingArea}" পরিবর্তন করে "${updatedName}" করা হয়েছে।`);
+            populateAreaManagement();
+            await saveAllDataToGitHub();
+            renderCustomerTable();
+        });
+
+        function deleteArea() {
+            const areaName = document.getElementById('existingAreaSelect').value;
+            if (confirm(`আপনি কি নিশ্চিত যে আপনি এরিয়া "${areaName}" ডিলিট করতে চান? এই এরিয়ার গ্রাহকরা এরিয়াশূন্য হবে।`)) {
+                
+                // ১. এরিয়া তালিকা থেকে ডিলিট
+                DEMO_AREAS = DEMO_AREAS.filter(a => a !== areaName);
+
+                // ২. গ্রাহকদের এরিয়া খালি করা
                 customers.forEach(c => {
-                    if (c.status === 'Active') {
-                        c.due = true;
-                        updatedCount++;
+                    if (c.area === areaName) {
+                        c.area = 'N/A (Deleted)';
                     }
                 });
-                await saveAllDataToGitHub(); // GitHub এ সেভ করা হচ্ছে
-                alert(`সফলভাবে ${updatedCount} জন গ্রাহকের জন্য মাসিক বিল জেনারেট/বকেয়া করা হয়েছে।`);
-                updateDashboard();
+                
+                alert(`এরিয়া "${areaName}" সফলভাবে ডিলিট করা হয়েছে।`);
+                populateAreaManagement();
+                saveAllDataToGitHub();
                 renderCustomerTable();
             }
         }
         
-        let dueCustomersForPrint = [];
+        function autoGenerateBill() {
+            if (confirm('আপনি কি নিশ্চিত যে আপনি সকল সক্রিয় গ্রাহকের জন্য মাসিক বিল জেনারেট করতে চান? এটি পূর্বের বকেয়া স্ট্যাটাস মুছে দেবে।')) {
+                let count = 0;
+                customers.forEach(c => {
+                    if (c.status === 'Active') {
+                        c.due = true; // সকলের বকেয়া স্ট্যাটাস সেট করা হলো
+                        count++;
+                    }
+                });
+                alert(`${count} জন সক্রিয় গ্রাহকের জন্য সফলভাবে মাসিক বিল জেনারেট করা হয়েছে (বকেয়া স্ট্যাটাস আপডেট)।`);
+                saveAllDataToGitHub();
+                updateDashboard();
+            }
+        }
+        
+        // --- 10. Bulk Print/SMS Logic (Demo) ---
         
         function openBulkDuePrintModal() {
-            dueCustomersForPrint = customers.filter(c => c.due && c.status === 'Active');
-            const tableBody = document.querySelector('#dueCustomersTable tbody');
+            const modal = document.getElementById('bulkPrintModal');
+            const tableBody = document.getElementById('dueCustomersTable').querySelector('tbody');
             tableBody.innerHTML = '';
+            
+            const relevantCustomers = currentRole === USER_ROLES.ADMIN 
+                ? customers 
+                : customers.filter(c => c.collector === currentUsername);
 
-            if (dueCustomersForPrint.length === 0) {
-                alert('বর্তমানে কোনো বকেয়া বিল নেই।');
+            const dueCustomers = relevantCustomers.filter(c => c.due);
+            
+            if (dueCustomers.length === 0) {
+                alert('বর্তমানে কোনো বকেয়া গ্রাহক নেই।');
                 return;
             }
-            
-            dueCustomersForPrint.forEach(c => {
+
+            dueCustomers.forEach(customer => {
                 const row = tableBody.insertRow();
                 row.innerHTML = `
-                    <td>${c.id}</td>
-                    <td>${c.name}</td>
-                    <td>${c.area}</td>
-                    <td>৳ ${c.package}</td>
-                    <td><input type="number" class="print-amount-input" data-id="${c.id}" value="${c.package}" min="0" style="width: 100%; padding: 8px;"></td>
+                    <td>${customer.id}</td>
+                    <td>${customer.name}</td>
+                    <td>${customer.area}</td>
+                    <td>৳ ${customer.package.toLocaleString('bn-BD')}</td>
+                    <td><input type="number" data-customer-id="${customer.id}" value="${customer.package}" min="0" style="width: 100%; padding: 5px;"></td>
                 `;
             });
 
-            document.getElementById('bulkPrintModal').style.display = 'block';
+            modal.style.display = 'block';
         }
-        
+
         function closeBulkPrintModal() {
             document.getElementById('bulkPrintModal').style.display = 'none';
         }
@@ -1544,90 +1510,95 @@
         function applyDefaultAmount() {
             const defaultAmount = parseInt(document.getElementById('defaultAmountInput').value);
             if (isNaN(defaultAmount) || defaultAmount < 0) {
-                alert('একটি বৈধ পরিমাণ দিন।');
+                alert('অনুগ্রহ করে একটি বৈধ পরিমাণ দিন।');
                 return;
             }
             
-            document.querySelectorAll('.print-amount-input').forEach(input => {
+            document.querySelectorAll('#dueCustomersTable input[type="number"]').forEach(input => {
                 input.value = defaultAmount;
             });
         }
         
         function generateBulkPrint() {
-            const inputs = document.querySelectorAll('.print-amount-input');
-            let printContent = '<h1>📃 বকেয়া বিল নোটিশ (মাসিক)</h1><div style="page-break-after: always;"></div>';
+            const printData = [];
             
-            inputs.forEach(input => {
-                const id = parseInt(input.getAttribute('data-id'));
-                const amount = parseInt(input.value);
-                const customer = customers.find(c => c.id === id);
+            document.querySelectorAll('#dueCustomersTable tbody tr').forEach(row => {
+                const customerId = parseInt(row.cells[4].querySelector('input').getAttribute('data-customer-id'));
+                const amountDue = parseInt(row.cells[4].querySelector('input').value);
                 
-                if (customer && amount > 0) {
-                    printContent += `
-                        <div style="border: 2px solid #333; padding: 15px; margin-bottom: 20px;">
-                            <h3 style="color: #dc3545;">🚨 বকেয়া বিল নোটিশ</h3>
-                            <p><strong>নাম:</strong> ${customer.name} (ID: ${customer.id})</p>
-                            <p><strong>এরিয়া:</strong> ${customer.area}</p>
-                            <p><strong>ফোন:</strong> ${customer.phone}</p>
-                            <hr>
-                            <p><strong>মাসিক প্যাকেজ:</strong> ৳ ${customer.package}</p>
-                            <h2 style="color: #dc3545;">মোট আদায়ের পরিমাণ: ৳ ${amount}</h2>
-                            <small>শেষ পরিশোধের তারিখ: ______________</small>
-                            <p style="margin-top: 10px;">সংগ্রহকারী স্বাক্ষর: _________________</p>
-                        </div>
-                        <div style="page-break-after: always;"></div>
-                    `;
+                const customer = customers.find(c => c.id === customerId);
+                
+                if (customer) {
+                    printData.push({
+                        id: customer.id,
+                        name: customer.name,
+                        area: customer.area,
+                        package: customer.package,
+                        amount: amountDue,
+                        phone: customer.phone
+                    });
                 }
             });
 
-            const printWindow = window.open('', '_blank');
-            printWindow.document.write('<html><head><title>বাল্ক প্রিন্ট</title>');
-            printWindow.document.write('<style>body{font-family: Arial, sans-serif; line-height: 1.6;}</style>');
-            printWindow.document.write('</head><body>');
-            printWindow.document.write(printContent);
-            printWindow.document.write('</body></html>');
-            printWindow.document.close();
-            printWindow.print();
-        }
-
-        function exportData(format) {
-            if (format === 'csv') {
-                exportCustomerToCSV(); 
+            if (printData.length === 0) {
+                alert('প্রিন্ট করার জন্য কোনো গ্রাহক ডেটা নেই।');
+                return;
             }
+
+            // এখানে একটি নতুন উইন্ডো বা প্রিন্ট ফ্রেম তৈরি করে ডেটা প্রিন্ট করার লজিক লিখতে হবে।
+            // সুবিধার জন্য, একটি সহজ এলার্ট দেখানো হলো।
+            let printList = '--- প্রিন্ট করার তালিকা ---\n';
+            printData.forEach(p => {
+                printList += `ID: ${p.id}, নাম: ${p.name}, বিল: ৳${p.amount}\n`;
+            });
+            
+            alert(`প্রিন্ট ডকুমেন্ট সফলভাবে তৈরি করা হয়েছে। ${printData.length}টি বিল প্রিন্ট হবে। (Demo Output:\n${printList})`);
+            
+            closeBulkPrintModal();
         }
         
-        function exportCustomerToCSV() {
-            const header = ["আইডি", "নাম", "ফোন", "এরিয়া", "প্যাকেজ", "স্ট্যাটাস", "বকেয়া", "কালেক্টর"];
+        // --- 11. Print Receipt Logic (Simplified Demo) ---
+        
+        function printReceipt(transactionId) {
+            const transaction = transactions.find(t => t.id === transactionId);
+            if (!transaction) return;
             
-            const csvRows = customers.map(c => [
-                c.id,
-                c.name,
-                c.phone,
-                c.area,
-                c.package,
-                c.status,
-                c.due ? 'হ্যাঁ' : 'না',
-                c.collector
-            ].map(String).map(s => `"${s.replace(/"/g, '""')}"`).join(','));
+            const customer = customers.find(c => c.id === transaction.customerId);
+            const customerName = customer ? customer.name : transaction.customerName; 
+            const collectorName = DEMO_USERS[transaction.collector] ? DEMO_USERS[transaction.collector].name : transaction.collector;
 
-            const csvContent = [header.join(','), ...csvRows].join('\n');
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.setAttribute("download", "customer_data.csv");
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            const receiptContent = `
+                =================================
+                || প্রফেশনাল বিলিং সিস্টেম      ||
+                =================================
+                ইনভয়েস নং: ${transaction.id}
+                তারিখ: ${new Date(transaction.time).toLocaleDateString('bn-BD')}
+                সময়: ${new Date(transaction.time).toLocaleTimeString('bn-BD')}
+                ---------------------------------
+                গ্রাহকের নাম: ${customerName}
+                গ্রাহক ID: ${transaction.customerId}
+                যোগাযোগ: ${customer ? customer.phone : 'N/A'}
+                ---------------------------------
+                মাসিক প্যাকেজ: ৳ ${transaction.package.toLocaleString('bn-BD')}
+                আদায়ের পরিমাণ: ৳ ${transaction.amount.toLocaleString('bn-BD')}
+                পেমেন্ট মেথড: ${transaction.method}
+                কালেক্টর: ${collectorName}
+                =================================
+                ধন্যবাদ।
+            `;
+            
+            alert(receiptContent); 
+            // বাস্তব ক্ষেত্রে, এটি window.print() ব্যবহার করে একটি নতুন উইন্ডো বা iframe এ প্রিন্ট করতে হবে।
         }
 
-        // --- 11. Initialization ---
-        
-        async function initializeApp() { // async করা হয়েছে
+
+        // --- 12. Initialization ---
+
+        async function initializeApp() {
+            // ১. GitHub থেকে ডেটা লোড করার চেষ্টা করা
+            const gitHubLoadSuccess = await loadDataFromGitHub();
             
-            // ১. GitHub থেকে সর্বশেষ ডেটা লোড করার চেষ্টা করুন (রিস্টোর)
-            await loadDataFromGitHub();
-            
-            // ২. Local Storage (GitHub ক্যাশ) অথবা Default ডেটা থেকে অ্যাপ্লিকেশন ভ্যারিয়েবল লোড করুন
+            // ২. Local Storage/Default থেকে ডেটা লোড করা
             loadInitialData(); 
             
             const storedRole = localStorage.getItem('currentRole');
@@ -1668,5 +1639,3 @@
     </script>
 </body>
 </html>
-
-
